@@ -7,5 +7,5 @@ BLACK_FLASH_ATTEMPT
 
 ## What changed
 
-## How to test
-- [ ] `dotnet test`
+## Preflight
+- [ ] I ran `.\scripts\preflight.ps1`
