@@ -1,0 +1,58 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build
+
+      - name: Black Flash
+        if: ${{ success() && github.event_name == 'pull_request' && github.event.action == 'opened' }}
+        shell: powershell
+        run: |
+          $marker = 'BLACK_FLASH_ATTEMPT'
+
+          $title = @'
+          ${{ github.event.pull_request.title }}
+          '@
+
+          $body = @'
+          ${{ github.event.pull_request.body }}
+          '@
+
+          $text = ($title + "`n" + $body)
+
+          if ($text -match [regex]::Escape($marker)) {
+            Write-Host ""
+            Write-Host "========================================"
+            Write-Host "[SURE-HIT] BLACK FLASH"
+            Write-Host "First-contact PR succeeded. Canon Black Flash recorded."
+            Write-Host ("PR #" + "${{ github.event.pull_request.number }}")
+            Write-Host ("SHA " + $env:GITHUB_SHA.Substring(0,7))
+            Write-Host "========================================"
+            Write-Host ""
+          }
+          else {
+            Write-Host "[SURE-HIT] No BLACK_FLASH_ATTEMPT marker in PR title/body. Canon Black Flash not recorded."
+          }
