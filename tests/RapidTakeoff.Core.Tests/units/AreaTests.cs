@@ -59,4 +59,17 @@ public sealed class AreaTests
         var a = Area.FromSquareInches(10);
         Assert.Throws<DivideByZeroException>(() => _ = a / 0);
     }
+
+    [Fact]
+    public void FromRectangle_ComputesSquareInches()
+    {
+        var width = Length.FromFeet(4);   // 48 in
+        var height = Length.FromFeet(8);  // 96 in
+
+        var area = Area.FromRectangle(width, height);
+
+        Assert.Equal(4608.0, area.TotalSquareInches, 10); // 48 * 96
+        Assert.Equal(32.0, area.TotalSquareFeet, 10);     // 4*8
+    }
+
 }
