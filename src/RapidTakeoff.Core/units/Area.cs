@@ -77,4 +77,13 @@ public readonly record struct Area
     {
         return $"{TotalSquareFeet:0.###} sqft ({TotalSquareInches:0.###} sqin)";
     }
+
+    /// <summary>
+    /// Creates an <see cref="Area"/> for a rectangle defined by width and height.
+    /// </summary>
+    public static Area FromRectangle(Length width, Length height)
+    {
+        return FromSquareInches(width.TotalInches * height.TotalInches);
+    }
+
 }
