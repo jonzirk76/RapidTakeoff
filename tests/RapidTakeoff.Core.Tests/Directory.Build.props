@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- Tests are not a public API surface; don't require XML docs -->
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>
