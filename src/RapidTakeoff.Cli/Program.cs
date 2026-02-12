@@ -1,4 +1,5 @@
-﻿using RapidTakeoff.Core.Takeoff.Drywall;
+using RapidTakeoff.Core.Takeoff.Drywall;
+using RapidTakeoff.Core.Takeoff.Insulation;
 using RapidTakeoff.Core.Units;
 
 namespace RapidTakeoff.Cli;
@@ -26,7 +27,8 @@ public static class Program
             return command switch
             {
                 "drywall" => RunDrywall(args.Skip(1).ToArray()),
-                "studs"   => RunStuds(args.Skip(1).ToArray()),
+                "studs" => RunStuds(args.Skip(1).ToArray()),
+                "insulation" => RunInsulation(args.Skip(1).ToArray()),
                 _ => UnknownCommand(command)
             };
         }
@@ -54,9 +56,12 @@ public static class Program
         Console.WriteLine("RapidTakeoff CLI");
         Console.WriteLine();
         Console.WriteLine("Commands:");
-        Console.WriteLine("  drywall   Drywall sheet takeoff from wall lengths and height");
+        Console.WriteLine("  drywall    Drywall sheet takeoff from wall lengths and height");
+        Console.WriteLine("  studs      Stud takeoff from wall lengths and spacing");
+        Console.WriteLine("  insulation Insulation roll/bag takeoff from wall lengths and height");
         Console.WriteLine();
-        Console.WriteLine("Usage:");
+
+        Console.WriteLine("Usage (drywall):");
         Console.WriteLine("  rapid drywall --height-feet 8 --lengths-feet 12,10,12,10 --sheet 4x8 --waste 0.10");
         Console.WriteLine();
         Console.WriteLine("Options (drywall):");
@@ -66,13 +71,8 @@ public static class Program
         Console.WriteLine("  --waste <number>             Waste factor as fraction (default: 0.10)");
         Console.WriteLine("  --price-per-sheet <number>   Optional $/sheet for cost estimate");
         Console.WriteLine();
-        Console.WriteLine("Examples:");
-        Console.WriteLine("  rapid drywall --height-feet 8 --lengths-feet 12,10,12,10");
-        Console.WriteLine("  rapid drywall --height-feet 9 --lengths-feet 20,12 --sheet 4x12 --waste 0.12");
-    
-        Console.WriteLine("  studs      Stud takeoff from wall lengths and spacing");
-        Console.WriteLine();
-        Console.WriteLine("Usage:");
+
+        Console.WriteLine("Usage (studs):");
         Console.WriteLine("  rapid studs --lengths-feet 12,10,12,10 --spacing-in 16 --waste 0.05");
         Console.WriteLine();
         Console.WriteLine("Options (studs):");
@@ -82,6 +82,17 @@ public static class Program
         Console.WriteLine("  --price-per-stud <number>    Optional $/stud for cost estimate");
         Console.WriteLine();
 
+        Console.WriteLine("Usage (insulation):");
+        Console.WriteLine("  rapid insulation --height-feet 8 --lengths-feet 12,10,12,10 --coverage-sqft 40 --waste 0.10");
+        Console.WriteLine();
+        Console.WriteLine("Options (insulation):");
+        Console.WriteLine("  --height-feet <number>       Wall height in feet (required)");
+        Console.WriteLine("  --lengths-feet <csv>         Comma-separated wall lengths in feet (required)");
+        Console.WriteLine("  --coverage-sqft <number>     Coverage per roll/bag in sqft (required)");
+        Console.WriteLine("  --waste <number>             Waste factor as fraction (default: 0.10)");
+        Console.WriteLine("  --name <text>                Optional product name");
+        Console.WriteLine("  --price-per-unit <number>    Optional $/roll or $/bag for cost estimate");
+        Console.WriteLine();
     }
 
     private static int RunDrywall(string[] args)
@@ -121,7 +132,7 @@ public static class Program
         var totalLen = lengthsFeet.Sum();
 
         Console.WriteLine("========================================");
-        Console.WriteLine("RapidTakeoff — Drywall Takeoff");
+        Console.WriteLine("RapidTakeoff - Drywall Takeoff");
         Console.WriteLine("========================================");
         Console.WriteLine($"Walls (ft): {string.Join(" + ", lengthsFeet.Select(x => x.ToString("0.###")))}");
         Console.WriteLine($"Total length: {totalLen:0.###} ft");
@@ -209,6 +220,14 @@ public static class Program
         return v;
     }
 
+    private static string? GetOptionalNullableString(Dictionary<string, string> opts, string key)
+    {
+        if (!opts.TryGetValue(key, out var s))
+            return null;
+
+        return string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+    }
+
     private static List<double> ParseCsvDoubles(string csv)
     {
         var parts = csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -259,7 +278,7 @@ public static class Program
         double? pricePerStud)
     {
         Console.WriteLine("========================================");
-        Console.WriteLine("RapidTakeoff — Stud Takeoff");
+        Console.WriteLine("RapidTakeoff - Stud Takeoff");
         Console.WriteLine("========================================");
 
         Console.WriteLine($"Walls (ft): {string.Join(" + ", lengthsFeet.Select(x => x.ToString("0.###")))}");
@@ -280,6 +299,65 @@ public static class Program
         {
             var cost = result.TotalStuds * pricePerStud.Value;
             Console.WriteLine($"Price/stud: ${pricePerStud.Value:0.##}");
+            Console.WriteLine($"Est. cost:  ${cost:0.##}");
+        }
+
+        Console.WriteLine("========================================");
+    }
+
+    private static int RunInsulation(string[] args)
+    {
+        var opts = ParseOptions(args);
+
+        var heightFeet = GetRequiredDouble(opts, "--height-feet");
+        var lengthsCsv = GetRequiredString(opts, "--lengths-feet");
+        var coverageSqFt = GetRequiredDouble(opts, "--coverage-sqft");
+        var waste = GetOptionalDouble(opts, "--waste", 0.10);
+        var name = GetOptionalNullableString(opts, "--name");
+        var pricePerUnit = GetOptionalNullableDouble(opts, "--price-per-unit");
+
+        var lengthsFeet = ParseCsvDoubles(lengthsCsv);
+        if (lengthsFeet.Count == 0)
+            throw new ArgumentOutOfRangeException("--lengths-feet", "At least one wall length is required.");
+
+        var totalLength = Length.FromFeet(lengthsFeet.Sum());
+        var height = Length.FromFeet(heightFeet);
+        var netArea = Area.FromRectangle(totalLength, height);
+
+        var product = new InsulationProduct(Area.FromSquareFeet(coverageSqFt), name);
+        var result = InsulationTakeoffCalculator.Calculate(netArea, product, waste);
+
+        PrintInsulationReport(heightFeet, lengthsFeet, coverageSqFt, result, pricePerUnit);
+        return 0;
+    }
+
+    private static void PrintInsulationReport(
+        double heightFeet,
+        List<double> lengthsFeet,
+        double coverageSqFt,
+        InsulationTakeoffResult result,
+        double? pricePerUnit)
+    {
+        var totalLen = lengthsFeet.Sum();
+
+        Console.WriteLine("========================================");
+        Console.WriteLine("RapidTakeoff - Insulation Takeoff");
+        Console.WriteLine("========================================");
+        Console.WriteLine($"Walls (ft): {string.Join(" + ", lengthsFeet.Select(x => x.ToString("0.###")))}");
+        Console.WriteLine($"Total length: {totalLen:0.###} ft");
+        Console.WriteLine($"Height: {heightFeet:0.###} ft");
+        Console.WriteLine();
+        Console.WriteLine($"Product:    {result.Product.Name ?? "Insulation"}");
+        Console.WriteLine($"Coverage:   {coverageSqFt:0.###} sqft per unit");
+        Console.WriteLine($"Net area:   {result.NetArea.TotalSquareFeet:0.###} sqft");
+        Console.WriteLine($"Waste:      {result.WasteFactor:0.###}");
+        Console.WriteLine($"Gross area: {result.GrossArea.TotalSquareFeet:0.###} sqft");
+        Console.WriteLine($"Quantity:   {result.Quantity}");
+
+        if (pricePerUnit is not null)
+        {
+            var cost = result.Quantity * pricePerUnit.Value;
+            Console.WriteLine($"Price/unit: ${pricePerUnit.Value:0.##}");
             Console.WriteLine($"Est. cost:  ${cost:0.##}");
         }
 
