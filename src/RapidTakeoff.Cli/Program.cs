@@ -1,5 +1,8 @@
+using System.Text.Json;
+using RapidTakeoff.Core.Projects;
 using RapidTakeoff.Core.Takeoff.Drywall;
 using RapidTakeoff.Core.Takeoff.Insulation;
+using RapidTakeoff.Core.Takeoff.Studs;
 using RapidTakeoff.Core.Units;
 
 namespace RapidTakeoff.Cli;
@@ -29,6 +32,7 @@ public static class Program
                 "drywall" => RunDrywall(args.Skip(1).ToArray()),
                 "studs" => RunStuds(args.Skip(1).ToArray()),
                 "insulation" => RunInsulation(args.Skip(1).ToArray()),
+                "estimate" => RunEstimate(args.Skip(1).ToArray()),
                 _ => UnknownCommand(command)
             };
         }
@@ -59,6 +63,7 @@ public static class Program
         Console.WriteLine("  drywall    Drywall sheet takeoff from wall lengths and height");
         Console.WriteLine("  studs      Stud takeoff from wall lengths and spacing");
         Console.WriteLine("  insulation Insulation roll/bag takeoff from wall lengths and height");
+        Console.WriteLine("  estimate   Project estimate from a JSON file");
         Console.WriteLine();
 
         Console.WriteLine("Usage (drywall):");
@@ -92,6 +97,14 @@ public static class Program
         Console.WriteLine("  --waste <number>             Waste factor as fraction (default: 0.10)");
         Console.WriteLine("  --name <text>                Optional product name");
         Console.WriteLine("  --price-per-unit <number>    Optional $/roll or $/bag for cost estimate");
+        Console.WriteLine();
+
+        Console.WriteLine("Usage (estimate):");
+        Console.WriteLine("  rapid estimate --project .\\examples\\project.json --format text");
+        Console.WriteLine();
+        Console.WriteLine("Options (estimate):");
+        Console.WriteLine("  --project <path>             Path to project JSON file (required)");
+        Console.WriteLine("  --format <text|csv>          Output format (default: text)");
         Console.WriteLine();
     }
 
@@ -362,5 +375,107 @@ public static class Program
         }
 
         Console.WriteLine("========================================");
+    }
+
+    private static int RunEstimate(string[] args)
+    {
+        var opts = ParseOptions(args);
+        var projectPath = GetRequiredString(opts, "--project");
+        var formatToken = GetOptionalString(opts, "--format", "text").Trim().ToLowerInvariant();
+
+        if (!File.Exists(projectPath))
+            throw new FileNotFoundException("Project file was not found.", projectPath);
+
+        var json = File.ReadAllText(projectPath);
+        var project = JsonSerializer.Deserialize<Project>(json, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        if (project is null)
+            throw new InvalidOperationException("Project file could not be parsed.");
+
+        project.Validate();
+
+        var wallLengths = project.WallLengthsFeet
+            .Select(Length.FromFeet)
+            .ToArray();
+        var height = Length.FromFeet(project.WallHeightFeet);
+        var totalLength = wallLengths.Aggregate(Length.FromFeet(0), (acc, x) => acc + x);
+        var netArea = Area.FromRectangle(totalLength, height);
+
+        var sheet = project.Settings.DrywallSheet switch
+        {
+            "4x8" => DrywallSheet.Sheet4x8,
+            "4x12" => DrywallSheet.Sheet4x12,
+            _ => throw new ArgumentOutOfRangeException(nameof(project.Settings.DrywallSheet), "Drywall sheet must be '4x8' or '4x12'.")
+        };
+
+        var drywall = DrywallTakeoffCalculator.Calculate(netArea, sheet, project.Settings.DrywallWaste);
+        var studs = StudTakeoffCalculator.Calculate(
+            wallLengths,
+            Length.FromInches(project.Settings.StudsSpacingInches),
+            project.Settings.StudsWaste);
+        var insulation = InsulationTakeoffCalculator.Calculate(
+            netArea,
+            new InsulationProduct(Area.FromSquareFeet(project.Settings.InsulationCoverageSquareFeet), "Insulation"),
+            project.Settings.InsulationWaste);
+
+        return formatToken switch
+        {
+            "text" => PrintEstimateText(project, netArea, drywall, studs, insulation),
+            "csv" => PrintEstimateCsv(project, netArea, drywall, studs, insulation),
+            _ => throw new ArgumentOutOfRangeException("--format", "Format must be 'text' or 'csv'.")
+        };
+    }
+
+    private static int PrintEstimateText(
+        Project project,
+        Area netArea,
+        DrywallTakeoffResult drywall,
+        StudTakeoffResult studs,
+        InsulationTakeoffResult insulation)
+    {
+        Console.WriteLine("========================================");
+        Console.WriteLine($"RapidTakeoff - Estimate: {project.Name}");
+        Console.WriteLine("========================================");
+        Console.WriteLine("Inputs");
+        Console.WriteLine($"  Wall height (ft): {project.WallHeightFeet:0.###}");
+        Console.WriteLine($"  Wall lengths (ft): {string.Join(", ", project.WallLengthsFeet.Select(x => x.ToString("0.###")))}");
+        Console.WriteLine($"  Drywall sheet: {project.Settings.DrywallSheet}");
+        Console.WriteLine($"  Drywall waste: {project.Settings.DrywallWaste:0.###}");
+        Console.WriteLine($"  Stud spacing (in): {project.Settings.StudsSpacingInches:0.###}");
+        Console.WriteLine($"  Stud waste: {project.Settings.StudsWaste:0.###}");
+        Console.WriteLine($"  Insulation coverage (sqft): {project.Settings.InsulationCoverageSquareFeet:0.###}");
+        Console.WriteLine($"  Insulation waste: {project.Settings.InsulationWaste:0.###}");
+        Console.WriteLine();
+        Console.WriteLine("Results");
+        Console.WriteLine($"  Wall net area: {netArea.TotalSquareFeet:0.###} sqft");
+        Console.WriteLine($"  Drywall sheets: {drywall.SheetCount} sheets ({drywall.Sheet.Width.TotalFeet:0.###}x{drywall.Sheet.Height.TotalFeet:0.###})");
+        Console.WriteLine($"  Studs: {studs.TotalStuds} studs (base {studs.BaseStuds})");
+        Console.WriteLine($"  Insulation: {insulation.Quantity} units");
+        Console.WriteLine("========================================");
+        return 0;
+    }
+
+    private static int PrintEstimateCsv(
+        Project project,
+        Area netArea,
+        DrywallTakeoffResult drywall,
+        StudTakeoffResult studs,
+        InsulationTakeoffResult insulation)
+    {
+        Console.WriteLine("Category,Item,Quantity,Unit,Notes");
+        Console.WriteLine($"Project,Name,1,project,\"{EscapeCsv(project.Name)}\"");
+        Console.WriteLine($"Area,Wall Net Area,{netArea.TotalSquareFeet:0.###},sqft,\"sum(lengths)*height\"");
+        Console.WriteLine($"Drywall,Sheet {drywall.Sheet.Width.TotalFeet:0.###}x{drywall.Sheet.Height.TotalFeet:0.###},{drywall.SheetCount},sheets,\"waste={drywall.WasteFactor:0.###}\"");
+        Console.WriteLine($"Studs,Framing Stud,{studs.TotalStuds},studs,\"base={studs.BaseStuds}; spacing-in={studs.Spacing.TotalInches:0.###}; waste={studs.WasteFactor:0.###}\"");
+        Console.WriteLine($"Insulation,Insulation Unit,{insulation.Quantity},units,\"coverage-sqft={insulation.Product.CoverageArea.TotalSquareFeet:0.###}; waste={insulation.WasteFactor:0.###}\"");
+        return 0;
+    }
+
+    private static string EscapeCsv(string value)
+    {
+        return value.Replace("\"", "\"\"");
     }
 }
