@@ -26,6 +26,7 @@ public static class Program
             return command switch
             {
                 "drywall" => RunDrywall(args.Skip(1).ToArray()),
+                "studs"   => RunStuds(args.Skip(1).ToArray()),
                 _ => UnknownCommand(command)
             };
         }
@@ -68,6 +69,19 @@ public static class Program
         Console.WriteLine("Examples:");
         Console.WriteLine("  rapid drywall --height-feet 8 --lengths-feet 12,10,12,10");
         Console.WriteLine("  rapid drywall --height-feet 9 --lengths-feet 20,12 --sheet 4x12 --waste 0.12");
+    
+        Console.WriteLine("  studs      Stud takeoff from wall lengths and spacing");
+        Console.WriteLine();
+        Console.WriteLine("Usage:");
+        Console.WriteLine("  rapid studs --lengths-feet 12,10,12,10 --spacing-in 16 --waste 0.05");
+        Console.WriteLine();
+        Console.WriteLine("Options (studs):");
+        Console.WriteLine("  --lengths-feet <csv>         Comma-separated wall lengths in feet (required)");
+        Console.WriteLine("  --spacing-in <number>        Stud spacing in inches (required)");
+        Console.WriteLine("  --waste <number>             Waste factor as fraction (default: 0.00)");
+        Console.WriteLine("  --price-per-stud <number>    Optional $/stud for cost estimate");
+        Console.WriteLine();
+
     }
 
     private static int RunDrywall(string[] args)
@@ -210,5 +224,65 @@ public static class Program
         }
 
         return vals;
+    }
+
+    private static int RunStuds(string[] args)
+    {
+        var opts = ParseOptions(args);
+
+        var lengthsCsv = GetRequiredString(opts, "--lengths-feet");
+        var spacingIn = GetRequiredDouble(opts, "--spacing-in");
+        var waste = GetOptionalDouble(opts, "--waste", 0.0);
+        var pricePerStud = GetOptionalNullableDouble(opts, "--price-per-stud");
+
+        var lengthsFeet = ParseCsvDoubles(lengthsCsv);
+        if (lengthsFeet.Count == 0)
+            throw new ArgumentOutOfRangeException("--lengths-feet", "At least one wall length is required.");
+
+        var wallLengths = lengthsFeet
+            .Select(Length.FromFeet)
+            .ToArray();
+
+        var spacing = Length.FromInches(spacingIn);
+
+        var result = RapidTakeoff.Core.Takeoff.Studs.StudTakeoffCalculator
+            .Calculate(wallLengths, spacing, waste);
+
+        PrintStudReport(lengthsFeet, spacingIn, result, pricePerStud);
+        return 0;
+    }
+
+    private static void PrintStudReport(
+        List<double> lengthsFeet,
+        double spacingIn,
+        RapidTakeoff.Core.Takeoff.Studs.StudTakeoffResult result,
+        double? pricePerStud)
+    {
+        Console.WriteLine("========================================");
+        Console.WriteLine("RapidTakeoff — Stud Takeoff");
+        Console.WriteLine("========================================");
+
+        Console.WriteLine($"Walls (ft): {string.Join(" + ", lengthsFeet.Select(x => x.ToString("0.###")))}");
+        Console.WriteLine($"Spacing: {spacingIn:0.###} in OC");
+        Console.WriteLine();
+
+        for (var i = 0; i < result.StudsPerWall.Count; i++)
+        {
+            Console.WriteLine($"Wall {i + 1}: {result.StudsPerWall[i]} studs");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"Base studs: {result.BaseStuds}");
+        Console.WriteLine($"Waste:      {result.WasteFactor:0.###}");
+        Console.WriteLine($"Total studs: {result.TotalStuds}");
+
+        if (pricePerStud is not null)
+        {
+            var cost = result.TotalStuds * pricePerStud.Value;
+            Console.WriteLine($"Price/stud: ${pricePerStud.Value:0.##}");
+            Console.WriteLine($"Est. cost:  ${cost:0.##}");
+        }
+
+        Console.WriteLine("========================================");
     }
 }
