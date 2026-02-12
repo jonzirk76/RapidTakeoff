@@ -1,0 +1,13 @@
+{
+  "name": "Room 1",
+  "wallHeightFeet": 8,
+  "wallLengthsFeet": [7, 15, 7, 15],
+  "settings": {
+    "drywallSheet": "4x8",
+    "drywallWaste": 0.10,
+    "studsSpacingInches": 16,
+    "studsWaste": 0.05,
+    "insulationWaste": 0.10,
+    "insulationCoverageSquareFeet": 40
+  }
+}
