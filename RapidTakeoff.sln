@@ -11,6 +11,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{697E66C4
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RapidTakeoff.Core.Tests", "tests\RapidTakeoff.Core.Tests\RapidTakeoff.Core.Tests.csproj", "{9E8036DF-2BF4-410C-96F6-066DB53E329C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RapidTakeoff.Cli", "src\RapidTakeoff.Cli\RapidTakeoff.Cli.csproj", "{B406DC71-4483-4CBF-B841-AD380417D421}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,9 +30,14 @@ Global
 		{9E8036DF-2BF4-410C-96F6-066DB53E329C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9E8036DF-2BF4-410C-96F6-066DB53E329C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9E8036DF-2BF4-410C-96F6-066DB53E329C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B406DC71-4483-4CBF-B841-AD380417D421}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B406DC71-4483-4CBF-B841-AD380417D421}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B406DC71-4483-4CBF-B841-AD380417D421}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B406DC71-4483-4CBF-B841-AD380417D421}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{1E73E321-9EA3-462C-8C0E-A0418F2F975B} = {470E5850-173F-4052-8721-04F937685433}
 		{9E8036DF-2BF4-410C-96F6-066DB53E329C} = {697E66C4-E19E-4B5A-BB97-49B74DD99524}
+		{B406DC71-4483-4CBF-B841-AD380417D421} = {470E5850-173F-4052-8721-04F937685433}
 	EndGlobalSection
 EndGlobal
