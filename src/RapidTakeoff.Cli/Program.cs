@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Runtime.InteropServices;
 using RapidTakeoff.Core.Projects;
 using RapidTakeoff.Core.Takeoff.Drywall;
 using RapidTakeoff.Core.Takeoff.Insulation;
@@ -12,14 +14,23 @@ namespace RapidTakeoff.Cli;
 /// </summary>
 public static class Program
 {
+    private static readonly Regex CommandTokenRegex = new("\"([^\"]*)\"|(\\S+)", RegexOptions.Compiled);
+
     /// <summary>
     /// Application entry point.
     /// </summary>
     public static int Main(string[] args)
     {
+        return Run(args, allowInteractivePrompt: true);
+    }
+
+    private static int Run(string[] args, bool allowInteractivePrompt)
+    {
         if (args.Length == 0 || IsHelp(args[0]))
         {
             PrintHelp();
+            if (allowInteractivePrompt && TryRunInteractivePrompt())
+                return 0;
             return 0;
         }
 
@@ -477,5 +488,66 @@ public static class Program
     private static string EscapeCsv(string value)
     {
         return value.Replace("\"", "\"\"");
+    }
+
+    private static bool TryRunInteractivePrompt()
+    {
+        if (!OperatingSystem.IsWindows())
+            return false;
+
+        if (!IsLikelyOwnConsoleWindow())
+            return false;
+
+        Console.WriteLine();
+        Console.WriteLine("Enter a command and options (example: estimate --project .\\examples\\project1.json).");
+        Console.WriteLine("Press Enter on an empty line to exit.");
+        Console.WriteLine();
+
+        while (true)
+        {
+            Console.Write("rapid> ");
+            var line = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(line))
+                return true;
+
+            var tokens = SplitCommandLine(line);
+            if (tokens.Length == 0)
+                continue;
+
+            _ = Run(tokens, allowInteractivePrompt: false);
+            Console.WriteLine();
+        }
+    }
+
+    private static bool IsLikelyOwnConsoleWindow()
+    {
+        // Double-click launches usually create a console hosting only this process.
+        // Terminal-launched runs typically include additional attached console processes.
+        var processIds = new uint[8];
+        var count = GetConsoleProcessList(processIds, (uint)processIds.Length);
+        return count == 1;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint GetConsoleProcessList(uint[] processList, uint processCount);
+
+    private static string[] SplitCommandLine(string input)
+    {
+        var matches = CommandTokenRegex.Matches(input);
+        var result = new List<string>(matches.Count);
+
+        foreach (Match match in matches)
+        {
+            if (match.Groups[1].Success)
+            {
+                result.Add(match.Groups[1].Value);
+            }
+            else if (match.Groups[2].Success)
+            {
+                result.Add(match.Groups[2].Value);
+            }
+        }
+
+        return result.ToArray();
     }
 }
