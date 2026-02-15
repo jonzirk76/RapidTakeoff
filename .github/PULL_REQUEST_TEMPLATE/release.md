@@ -5,7 +5,7 @@
 - [ ] examples/ updated and referenced by README
 - [ ] `.\scripts\preflight.ps1` passes locally
 - [ ] CI is green on this PR
-- [ ] Version tag planned (e.g., v0.1.0)
+- [ ] Version tag planned (e.g., v0.2.0)
 
 ## Notes
 - Target version:
