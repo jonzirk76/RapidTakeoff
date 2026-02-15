@@ -5,6 +5,9 @@
   </ItemGroup>
 
   <PropertyGroup>
+    <Product>RapidTakeoff</Product>
+    <Description>Lightweight residential construction takeoff engine.</Description>
+    <AssemblyName>rapid</AssemblyName>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

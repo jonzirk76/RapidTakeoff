@@ -1,5 +1,5 @@
 {
-  "name": "Garage",
+  "name": "Basic Room Example",
   "wallHeightFeet": 8,
   "wallLengthsFeet": [12, 10, 12, 10],
   "settings": {

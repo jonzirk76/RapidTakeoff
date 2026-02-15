@@ -1,9 +1,9 @@
 {
-  "name": "Room 1",
-  "wallHeightFeet": 8,
-  "wallLengthsFeet": [7, 15, 7, 15],
+  "name": "Garage",
+  "wallHeightFeet": 10,
+  "wallLengthsFeet": [24, 24, 24, 24],
   "settings": {
-    "drywallSheet": "4x8",
+    "drywallSheet": "4x12",
     "drywallWaste": 0.10,
     "studsSpacingInches": 16,
     "studsWaste": 0.05,
