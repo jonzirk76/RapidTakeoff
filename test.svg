@@ -1,0 +1,24 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="700" viewBox="0 0 1000 700">
+  <text x="50" y="40" font-family="Arial" font-size="24">RapidTakeoff — Wall Strips</text>
+  <text x="50" y="70" font-family="Arial" font-size="14">Project: Basic Room Example</text>
+  <!-- WALL_STRIPS_V0 -->
+  <text x="50" y="132" font-family="Arial" font-size="14">Wall 1</text>
+  <rect x="150" y="120" width="700.00" height="12" fill="none" stroke="black" stroke-width="1" />
+  <text x="860.00" y="132" font-family="Arial" font-size="12">12.00 ft</text>
+  <text x="50" y="182" font-family="Arial" font-size="14">Wall 2</text>
+  <rect x="150" y="170" width="583.33" height="12" fill="none" stroke="black" stroke-width="1" />
+  <text x="743.33" y="182" font-family="Arial" font-size="12">10.00 ft</text>
+  <text x="50" y="232" font-family="Arial" font-size="14">Wall 3</text>
+  <rect x="150" y="220" width="700.00" height="12" fill="none" stroke="black" stroke-width="1" />
+  <text x="860.00" y="232" font-family="Arial" font-size="12">12.00 ft</text>
+  <text x="50" y="282" font-family="Arial" font-size="14">Wall 4</text>
+  <rect x="150" y="270" width="583.33" height="12" fill="none" stroke="black" stroke-width="1" />
+  <text x="743.33" y="282" font-family="Arial" font-size="12">10.00 ft</text>
+  <text x="50" y="380" font-family="Arial" font-size="16">Summary</text>
+  <text x="50" y="405" font-size="12">Total Length: 44.00 ft</text>
+  <text x="50" y="425" font-size="12">Height: 8.00 ft</text>
+  <text x="50" y="445" font-size="12">Net Area: 352.00 sq ft</text>
+  <text x="50" y="465" font-size="12">Drywall Sheets: 13</text>
+  <text x="50" y="485" font-size="12">Stud Count: 40</text>
+  <text x="50" y="505" font-size="12">Insulation Units: 10</text>
+</svg>

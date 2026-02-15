@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Runtime.InteropServices;
@@ -6,6 +7,7 @@ using RapidTakeoff.Core.Takeoff.Drywall;
 using RapidTakeoff.Core.Takeoff.Insulation;
 using RapidTakeoff.Core.Takeoff.Studs;
 using RapidTakeoff.Core.Units;
+using RapidTakeoff.Rendering.WallStrips;
 
 namespace RapidTakeoff.Cli;
 
@@ -115,7 +117,8 @@ public static class Program
         Console.WriteLine();
         Console.WriteLine("Options (estimate):");
         Console.WriteLine("  --project <path>             Path to project JSON file (required)");
-        Console.WriteLine("  --format <text|csv>          Output format (default: text)");
+        Console.WriteLine("  --format <text|csv|svg>      Output format (default: text)");
+        Console.WriteLine("  --out <path>                 Required when --format svg (output .svg path)");
         Console.WriteLine();
     }
 
@@ -393,6 +396,10 @@ public static class Program
         var opts = ParseOptions(args);
         var projectPath = GetRequiredString(opts, "--project");
         var formatToken = GetOptionalString(opts, "--format", "text").Trim().ToLowerInvariant();
+        var svgOutputPath = GetOptionalNullableString(opts, "--out");
+
+        if (formatToken == "svg" && string.IsNullOrWhiteSpace(svgOutputPath))
+            throw new ArgumentOutOfRangeException("--out", "--out is required when --format is 'svg'.");
 
         if (!File.Exists(projectPath))
             throw new FileNotFoundException("Project file was not found.", projectPath);
@@ -436,7 +443,8 @@ public static class Program
         {
             "text" => PrintEstimateText(project, netArea, drywall, studs, insulation),
             "csv" => PrintEstimateCsv(project, netArea, drywall, studs, insulation),
-            _ => throw new ArgumentOutOfRangeException("--format", "Format must be 'text' or 'csv'.")
+            "svg" => PrintEstimateSvg(project, netArea, drywall, studs, insulation, svgOutputPath!),
+            _ => throw new ArgumentOutOfRangeException("--format", "Format must be 'text', 'csv', or 'svg'.")
         };
     }
 
@@ -482,6 +490,41 @@ public static class Program
         Console.WriteLine($"Drywall,Sheet {drywall.Sheet.Width.TotalFeet:0.###}x{drywall.Sheet.Height.TotalFeet:0.###},{drywall.SheetCount},sheets,\"waste={drywall.WasteFactor:0.###}\"");
         Console.WriteLine($"Studs,Framing Stud,{studs.TotalStuds},studs,\"base={studs.BaseStuds}; spacing-in={studs.Spacing.TotalInches:0.###}; waste={studs.WasteFactor:0.###}\"");
         Console.WriteLine($"Insulation,Insulation Unit,{insulation.Quantity},units,\"coverage-sqft={insulation.Product.CoverageArea.TotalSquareFeet:0.###}; waste={insulation.WasteFactor:0.###}\"");
+        return 0;
+    }
+
+    private static int PrintEstimateSvg(
+        Project project,
+        Area netArea,
+        DrywallTakeoffResult drywall,
+        StudTakeoffResult studs,
+        InsulationTakeoffResult insulation,
+        string outputPath)
+    {
+        var projectName = string.IsNullOrWhiteSpace(project.Name) ? "Untitled" : project.Name;
+        var walls = project.WallLengthsFeet
+            .Select((length, index) => new WallSegmentDto($"Wall {index + 1}", length))
+            .ToArray();
+
+        var summary = new SummaryDto(
+            project.WallLengthsFeet.Sum(),
+            netArea.TotalSquareFeet,
+            drywall.SheetCount,
+            studs.TotalStuds,
+            insulation.Quantity);
+
+        var dto = new WallStripDto(
+            projectName,
+            project.WallHeightFeet,
+            walls,
+            summary);
+
+        var renderer = new WallStripSvgRenderer();
+        var svg = renderer.Render(dto);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+        File.WriteAllText(outputPath, svg, Encoding.UTF8);
+        Console.WriteLine($"Wrote SVG: {outputPath}");
         return 0;
     }
 

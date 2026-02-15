@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RapidTakeoff.Core\RapidTakeoff.Core.csproj" />
+    <ProjectReference Include="..\RapidTakeoff.Rendering\RapidTakeoff.Rendering.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

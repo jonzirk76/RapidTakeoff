@@ -27,6 +27,7 @@ How to run examples:
 ```
 .\rapid.exe estimate --project .\examples\exampleproject.json --format text
 .\rapid.exe estimate --project .\examples\exampleproject.json --format csv
+.\rapid.exe estimate --project .\examples\exampleproject.json --format svg --out .\out\estimate.svg
 ```
 
 #### Option B: Run from source
@@ -83,4 +84,13 @@ Field requirements and accepted values:
 Notes:
 
 - JSON property names are case-insensitive.
-- The estimate output format is selected separately via CLI `--format text` or `--format csv`.
+- The estimate output format is selected separately via CLI `--format text`, `--format csv`, or `--format svg`.
+- When using `--format svg`, `--out <path>` is required.
+
+## SVG Wall Strip Output
+
+Generate a scaled wall strip diagram (no room topology):
+
+```bash
+rapid estimate --project examples/project.basic.json --format svg --out walls.svg
+```
