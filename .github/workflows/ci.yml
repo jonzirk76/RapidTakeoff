@@ -27,6 +27,19 @@ jobs:
       - name: Test
         run: dotnet test --configuration Release --no-build
 
+      - name: Publish
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: powershell
+        run: ./scripts/publish.ps1
+
+      - name: Upload publish artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: RapidTakeoff-win-x64
+          path: dist/win-x64/**
+          retention-days: 7
+
       - name: Black Flash
         if: ${{ success() && github.event_name == 'pull_request' && github.event.action == 'opened' }}
         shell: powershell

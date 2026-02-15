@@ -1,0 +1,52 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release-win-x64:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build
+
+      - name: Publish
+        shell: powershell
+        run: ./scripts/publish.ps1
+
+      # Optional (recommended): include examples + README in the zip
+      - name: Stage release bundle
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force bundle | Out-Null
+          Copy-Item -Recurse -Force dist/win-x64/* bundle/
+          if (Test-Path "examples") { Copy-Item -Recurse -Force examples bundle/examples }
+          if (Test-Path "README.md") { Copy-Item -Force README.md bundle/README.md }
+
+      - name: Zip release bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Compress-Archive -Path bundle/* -DestinationPath artifacts/RapidTakeoff-win-x64.zip -Force
+
+      - name: Create GitHub Release and upload zip
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/RapidTakeoff-win-x64.zip
