@@ -113,12 +113,15 @@ public static class Program
         Console.WriteLine();
 
         Console.WriteLine("Usage (estimate):");
-        Console.WriteLine("  rapid estimate --project .\\examples\\project.json --format text");
+        Console.WriteLine("  rapid estimate --project .\\examples\\exampleproject.json --format text");
+        Console.WriteLine("  rapid estimate --project .\\examples\\exampleproject.json --format csv");
+        Console.WriteLine("  rapid estimate --project .\\examples\\exampleproject2.json --format svg --out .\\out\\estimate.svg");
         Console.WriteLine();
         Console.WriteLine("Options (estimate):");
         Console.WriteLine("  --project <path>             Path to project JSON file (required)");
         Console.WriteLine("  --format <text|csv|svg>      Output format (default: text)");
         Console.WriteLine("  --out <path>                 Required when --format svg (output .svg path)");
+        Console.WriteLine("                               SVG writes a wall-strip diagram to the --out file");
         Console.WriteLine();
     }
 
@@ -542,7 +545,7 @@ public static class Program
             return false;
 
         Console.WriteLine();
-        Console.WriteLine("Enter a command and options (example: estimate --project .\\examples\\project1.json).");
+        Console.WriteLine("Enter a command and options (example: estimate --project .\\examples\\exampleproject.json).");
         Console.WriteLine("Press Enter on an empty line to exit.");
         Console.WriteLine();
 

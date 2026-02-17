@@ -22,7 +22,7 @@ UI and distribution layers will be added later.
 ```
 or run the .exe directly for interactive mode.
 
-How to run examples:
+Copy/paste example:
 
 ```
 .\rapid.exe estimate --project .\examples\exampleproject.json --format text
@@ -92,5 +92,5 @@ Notes:
 Generate a scaled wall strip diagram (no room topology):
 
 ```bash
-rapid estimate --project examples/project.basic.json --format svg --out walls.svg
+rapid estimate --project examples/exampleproject2.json --format svg --out walls.svg
 ```
