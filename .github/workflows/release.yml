@@ -21,6 +21,23 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Validate tag version matches Directory.Build.props
+        shell: pwsh
+        run: |
+          [xml]$props = Get-Content Directory.Build.props
+          $projectVersion = $props.Project.PropertyGroup.Version
+          $tagVersion = "${env:GITHUB_REF_NAME}".TrimStart('v')
+
+          if ([string]::IsNullOrWhiteSpace($projectVersion)) {
+            throw "Version not found in Directory.Build.props."
+          }
+
+          if ($tagVersion -ne $projectVersion) {
+            throw "Tag version '$tagVersion' does not match Directory.Build.props version '$projectVersion'."
+          }
+
+          Write-Host "Tag version '$tagVersion' matches Directory.Build.props version '$projectVersion'."
+
       - name: Restore
         run: dotnet restore
 
