@@ -21,11 +21,54 @@ public sealed class WallStripSvgRenderer
         if (dto.Walls is null) throw new ArgumentException("Walls collection is null.", nameof(dto));
         if (dto.Walls.Count == 0) throw new ArgumentException("Walls collection is empty.", nameof(dto));
 
-        // v0 skeleton: fixed canvas, title + project. We'll add layout next process.
-        const int width = 1000;
-        const int height = 700;
+        const int width = 1200;
+        const int leftMargin = 60;
+        const int rightMargin = 60;
+        const int topStart = 120;
+        const int footerPadding = 200;
+        const int maxElevationHeight = 120;
+        const double minPixelsPerFoot = 2.0;
+        const int wallGapX = 56;
+        const int rowGapY = 36;
+        const int rightDimReserve = 95;
+        const int drawableWidth = width - leftMargin - rightMargin;
 
-        var sb = new StringBuilder(capacity: 4096);
+        var safeHeightFeet = Math.Max(0, dto.HeightFeet);
+        var totalLengthFeet = Math.Max(1, dto.Walls.Sum(w => w.LengthFeet));
+        var totalGapWidth = wallGapX * Math.Max(0, dto.Walls.Count - 1);
+        var totalReserveWidth = rightDimReserve * dto.Walls.Count;
+        var widthPixelsPerFoot = (drawableWidth - totalGapWidth - totalReserveWidth) / totalLengthFeet;
+        var heightPixelsPerFoot = safeHeightFeet > 0
+            ? maxElevationHeight / safeHeightFeet
+            : widthPixelsPerFoot;
+        var pixelsPerFoot = Math.Max(minPixelsPerFoot, Math.Min(widthPixelsPerFoot, heightPixelsPerFoot));
+
+        // Keep one feet-to-pixels scale for both axes so wall proportions are realistic.
+        var stripHeight = Math.Max(1, (int)Math.Round(safeHeightFeet * pixelsPerFoot));
+        var wallBlockHeight = stripHeight + 62;
+
+        var xCursor = leftMargin;
+        var yCursor = topStart;
+        var wallBottom = topStart;
+
+        foreach (var wall in dto.Walls)
+        {
+            var rectWidth = wall.LengthFeet * pixelsPerFoot;
+            var blockWidth = rectWidth + rightDimReserve;
+            if (xCursor > leftMargin && xCursor + blockWidth > width - rightMargin)
+            {
+                xCursor = leftMargin;
+                yCursor += wallBlockHeight + rowGapY;
+            }
+
+            wallBottom = Math.Max(wallBottom, yCursor + wallBlockHeight);
+            xCursor += (int)Math.Ceiling(blockWidth + wallGapX);
+        }
+
+        var summaryStartY = wallBottom + 50;
+        var height = Math.Max(700, summaryStartY + footerPadding);
+
+        var sb = new StringBuilder(capacity: 6144);
 
         sb.AppendLine($@"<svg xmlns=""http://www.w3.org/2000/svg"" width=""{width}"" height=""{height}"" viewBox=""0 0 {width} {height}"">");
 
@@ -33,39 +76,49 @@ public sealed class WallStripSvgRenderer
         sb.AppendLine(@"  <text x=""50"" y=""40"" font-family=""Arial"" font-size=""24"">RapidTakeoff — Wall Strips</text>");
         sb.AppendLine($@"  <text x=""50"" y=""70"" font-family=""Arial"" font-size=""14"">Project: {EscapeXml(dto.ProjectName)}</text>");
 
-        const int leftMargin = 150;
-        const int rightMargin = 150;
-        const int topStart = 120;
-        const int rowSpacing = 50;
-        const int stripHeight = 12;
-        const int drawableWidth = width - leftMargin - rightMargin;
-
-        var longestWall = dto.Walls.Max(w => w.LengthFeet);
-        var pixelsPerFoot = longestWall > 0
-            ? drawableWidth / longestWall
-            : 1;
+        xCursor = leftMargin;
+        yCursor = topStart;
 
         for (int i = 0; i < dto.Walls.Count; i++)
         {
             var wall = dto.Walls[i];
 
-            var y = topStart + i * rowSpacing;
             var rectWidth = wall.LengthFeet * pixelsPerFoot;
+            var blockWidth = rectWidth + rightDimReserve;
+            if (xCursor > leftMargin && xCursor + blockWidth > width - rightMargin)
+            {
+                xCursor = leftMargin;
+                yCursor += wallBlockHeight + rowGapY;
+            }
 
-            // Wall label
+            // Wall rectangle scaled by length and common project height.
+            var rectRight = xCursor + rectWidth;
+            var rectBottom = yCursor + stripHeight;
             sb.AppendLine(
-                $@"  <text x=""50"" y=""{y + stripHeight}"" font-family=""Arial"" font-size=""14"">{EscapeXml(wall.Name)}</text>");
+                $@"  <rect x=""{xCursor}"" y=""{yCursor}"" width=""{rectWidth:F2}"" height=""{stripHeight}"" fill=""#eaf4ff"" stroke=""#1f2937"" stroke-width=""1"" />");
 
-            // Wall strip rectangle
+            // Height dimension marker and label.
+            var dimX = rectRight + 22;
+            sb.AppendLine($@"  <line x1=""{dimX}"" y1=""{yCursor}"" x2=""{dimX}"" y2=""{rectBottom}"" stroke=""#374151"" stroke-width=""1"" />");
+            sb.AppendLine($@"  <line x1=""{dimX - 5}"" y1=""{yCursor}"" x2=""{dimX + 5}"" y2=""{yCursor}"" stroke=""#374151"" stroke-width=""1"" />");
+            sb.AppendLine($@"  <line x1=""{dimX - 5}"" y1=""{rectBottom}"" x2=""{dimX + 5}"" y2=""{rectBottom}"" stroke=""#374151"" stroke-width=""1"" />");
             sb.AppendLine(
-                $@"  <rect x=""{leftMargin}"" y=""{y}"" width=""{rectWidth:F2}"" height=""{stripHeight}"" fill=""none"" stroke=""black"" stroke-width=""1"" />");
+                $@"  <text x=""{dimX + 10}"" y=""{yCursor + (stripHeight / 2) + 4}"" font-family=""Arial"" font-size=""11"" text-anchor=""start"">{dto.HeightFeet:F2} ft H</text>");
 
-            // Length label
+            // Length dimension marker and label along the bottom side.
+            var dimY = rectBottom + 18;
+            sb.AppendLine($@"  <line x1=""{xCursor}"" y1=""{dimY}"" x2=""{rectRight:F2}"" y2=""{dimY}"" stroke=""#374151"" stroke-width=""1"" />");
+            sb.AppendLine($@"  <line x1=""{xCursor}"" y1=""{dimY - 5}"" x2=""{xCursor}"" y2=""{dimY + 5}"" stroke=""#374151"" stroke-width=""1"" />");
+            sb.AppendLine($@"  <line x1=""{rectRight:F2}"" y1=""{dimY - 5}"" x2=""{rectRight:F2}"" y2=""{dimY + 5}"" stroke=""#374151"" stroke-width=""1"" />");
             sb.AppendLine(
-                $@"  <text x=""{leftMargin + rectWidth + 10:F2}"" y=""{y + stripHeight}"" font-family=""Arial"" font-size=""12"">{wall.LengthFeet:F2} ft</text>");
+                $@"  <text x=""{xCursor + (rectWidth / 2):F2}"" y=""{dimY + 16}"" font-family=""Arial"" font-size=""12"" text-anchor=""middle"">{wall.LengthFeet:F2} ft L</text>");
+
+            // Wall title under each elevation.
+            sb.AppendLine(
+                $@"  <text x=""{xCursor + (rectWidth / 2):F2}"" y=""{dimY + 38}"" font-family=""Arial"" font-size=""14"" text-anchor=""middle"">{EscapeXml(wall.Name)}</text>");
+
+            xCursor += (int)Math.Ceiling(blockWidth + wallGapX);
         }
-
-        var summaryStartY = topStart + dto.Walls.Count * rowSpacing + 60;
 
         sb.AppendLine($@"  <text x=""50"" y=""{summaryStartY}"" font-family=""Arial"" font-size=""16"">Summary</text>");
         summaryStartY += 25;

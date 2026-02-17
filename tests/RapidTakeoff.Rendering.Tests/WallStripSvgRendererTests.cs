@@ -37,12 +37,12 @@ public class WallStripSvgRendererTests
         Assert.Contains("RapidTakeoff — Wall Strips", svg);
         Assert.Contains("Project: Test Project", svg);
 
-        // New behavior assertions (since you implemented full Step 8)
         Assert.Contains("<rect", svg);
         Assert.Contains("Wall 1", svg);
+        Assert.Contains("8.00 ft H", svg);
+        Assert.Contains("12.00 ft L", svg);
         Assert.Contains("Summary", svg);
 
         Assert.EndsWith("</svg>", svg.Trim());
-
     }
 }
