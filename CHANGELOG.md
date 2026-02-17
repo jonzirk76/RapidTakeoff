@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.0
+### Added
+- Wall strip output has been upgraded to full elevations by applying height rendering.  Dimension lines have been added to each elevation.
+
+### Changed
+- Renderer now includes logic that applies wall height to the SVG output.
+
 ## v0.2.0
 ### Added
 - SVG output support for `rapid estimate` via `--format svg --out <path>`.
