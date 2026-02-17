@@ -87,9 +87,9 @@ Notes:
 - The estimate output format is selected separately via CLI `--format text`, `--format csv`, or `--format svg`.
 - When using `--format svg`, `--out <path>` is required.
 
-## SVG Wall Strip Output
+## SVG Wall Elevation Output
 
-Generate a scaled wall strip diagram (no room topology):
+Generate scaled wall elevations with length/height dimensions (no room topology):
 
 ```bash
 rapid estimate --project examples/exampleproject2.json --format svg --out walls.svg
