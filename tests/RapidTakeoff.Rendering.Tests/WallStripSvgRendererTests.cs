@@ -1,4 +1,5 @@
 using RapidTakeoff.Rendering.WallStrips;
+using RapidTakeoff.Rendering.Walls;
 
 namespace RapidTakeoff.Rendering.Tests;
 
@@ -18,8 +19,8 @@ public class WallStripSvgRendererTests
             HeightFeet: 8,
             Walls: new[]
             {
-                new WallSegmentDto("Wall 1", 12),
-                new WallSegmentDto("Wall 2", 8)
+                new WallSegmentDto("Wall 1", 12, []),
+                new WallSegmentDto("Wall 2", 8, [])
             },
             Summary: new SummaryDto(
                 TotalLengthFeet: 20,
@@ -44,5 +45,40 @@ public class WallStripSvgRendererTests
         Assert.Contains("Summary", svg);
 
         Assert.EndsWith("</svg>", svg.Trim());
+    }
+
+    /// <summary>
+    /// Verifies that penetrations are rendered as wall cutouts with an identifier label.
+    /// </summary>
+    [Fact]
+    public void Render_With_Penetration_Should_Render_Cutout()
+    {
+        var dto = new WallStripDto(
+            ProjectName: "Penetration Project",
+            HeightFeet: 8,
+            Walls: new[]
+            {
+                new WallSegmentDto(
+                    "Wall 1",
+                    12,
+                    new[]
+                    {
+                        new PenetrationDto("WIN-01", "window", 3, 3, 4, 3)
+                    })
+            },
+            Summary: new SummaryDto(
+                TotalLengthFeet: 12,
+                NetAreaSqFt: 96,
+                DrywallSheets: 4,
+                StudCount: 15,
+                InsulationUnits: 96
+            )
+        );
+
+        var renderer = new WallStripSvgRenderer();
+        var svg = renderer.Render(dto);
+
+        Assert.Contains(@"class=""penetration""", svg);
+        Assert.Contains("WIN-01", svg);
     }
 }

@@ -1,3 +1,5 @@
+using RapidTakeoff.Rendering.Walls;
+
 namespace RapidTakeoff.Rendering.WallStrips;
 
 /// <summary>
@@ -20,9 +22,11 @@ public sealed record WallStripDto(
 /// </summary>
 /// <param name="Name">Wall label (e.g., "Wall A").</param>
 /// <param name="LengthFeet">Wall length in feet.</param>
+/// <param name="Penetrations">Penetrations/openings in wall-local coordinates.</param>
 public sealed record WallSegmentDto(
     string Name,
-    double LengthFeet
+    double LengthFeet,
+    IReadOnlyList<PenetrationDto> Penetrations
 );
 
 /// <summary>

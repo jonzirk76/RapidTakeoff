@@ -8,6 +8,7 @@ using RapidTakeoff.Core.Takeoff.Insulation;
 using RapidTakeoff.Core.Takeoff.Studs;
 using RapidTakeoff.Core.Units;
 using RapidTakeoff.Rendering.WallStrips;
+using RapidTakeoff.Rendering.Walls;
 
 namespace RapidTakeoff.Cli;
 
@@ -506,7 +507,10 @@ public static class Program
     {
         var projectName = string.IsNullOrWhiteSpace(project.Name) ? "Untitled" : project.Name;
         var walls = project.WallLengthsFeet
-            .Select((length, index) => new WallSegmentDto($"Wall {index + 1}", length))
+            .Select((length, index) => new WallSegmentDto(
+                $"Wall {index + 1}",
+                length,
+                BuildDemoPenetrations(length, project.WallHeightFeet, index)))
             .ToArray();
 
         var summary = new SummaryDto(
@@ -529,6 +533,33 @@ public static class Program
         File.WriteAllText(outputPath, svg, Encoding.UTF8);
         Console.WriteLine($"Wrote SVG: {outputPath}");
         return 0;
+    }
+
+    private static IReadOnlyList<PenetrationDto> BuildDemoPenetrations(double wallLengthFeet, double wallHeightFeet, int wallIndex)
+    {
+        if (wallLengthFeet <= 0 || wallHeightFeet <= 0)
+            return [];
+
+        // Temporary demo data so penetration rendering is visible in SVG output.
+        // This can be replaced with project-backed penetration inputs in a follow-up PR.
+        if (wallIndex % 2 == 0 && wallLengthFeet >= 4.5 && wallHeightFeet >= 7.0)
+        {
+            var doorWidth = 3.0;
+            var doorHeight = Math.Min(6.8, wallHeightFeet - 0.2);
+            var doorX = Math.Clamp(1.0, 0.0, wallLengthFeet - doorWidth);
+            return [new PenetrationDto($"DR-{wallIndex + 1:00}", "door", doorX, 0.0, doorWidth, doorHeight)];
+        }
+
+        if (wallLengthFeet >= 5.0 && wallHeightFeet >= 6.5)
+        {
+            var windowWidth = Math.Min(4.0, wallLengthFeet - 1.0);
+            var windowHeight = Math.Min(3.0, wallHeightFeet - 2.0);
+            var windowX = (wallLengthFeet - windowWidth) / 2.0;
+            var windowY = Math.Max(0.0, Math.Min(3.0, wallHeightFeet - windowHeight));
+            return [new PenetrationDto($"WIN-{wallIndex + 1:00}", "window", windowX, windowY, windowWidth, windowHeight)];
+        }
+
+        return [];
     }
 
     private static string EscapeCsv(string value)

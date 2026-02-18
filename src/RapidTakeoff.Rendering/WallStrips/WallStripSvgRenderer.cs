@@ -21,6 +21,9 @@ public sealed class WallStripSvgRenderer
         if (dto.Walls is null) throw new ArgumentException("Walls collection is null.", nameof(dto));
         if (dto.Walls.Count == 0) throw new ArgumentException("Walls collection is empty.", nameof(dto));
 
+        const string svgBackgroundColor = "#f8fafc";
+        const string wallFillColor = "#c7d9eb";
+
         const int width = 1200;
         const int leftMargin = 60;
         const int rightMargin = 60;
@@ -71,6 +74,7 @@ public sealed class WallStripSvgRenderer
         var sb = new StringBuilder(capacity: 6144);
 
         sb.AppendLine($@"<svg xmlns=""http://www.w3.org/2000/svg"" width=""{width}"" height=""{height}"" viewBox=""0 0 {width} {height}"">");
+        sb.AppendLine($@"  <rect x=""0"" y=""0"" width=""{width}"" height=""{height}"" fill=""{svgBackgroundColor}"" />");
 
         // Title block
         sb.AppendLine(@"  <text x=""50"" y=""40"" font-family=""Arial"" font-size=""24"">RapidTakeoff — Wall Strips</text>");
@@ -95,7 +99,39 @@ public sealed class WallStripSvgRenderer
             var rectRight = xCursor + rectWidth;
             var rectBottom = yCursor + stripHeight;
             sb.AppendLine(
-                $@"  <rect x=""{xCursor}"" y=""{yCursor}"" width=""{rectWidth:F2}"" height=""{stripHeight}"" fill=""#eaf4ff"" stroke=""#1f2937"" stroke-width=""1"" />");
+                $@"  <rect x=""{xCursor}"" y=""{yCursor}"" width=""{rectWidth:F2}"" height=""{stripHeight}"" fill=""{wallFillColor}"" stroke=""#1f2937"" stroke-width=""1"" />");
+
+            // Penetrations rendered as white cutouts in wall-local coordinates.
+            foreach (var penetration in wall.Penetrations ?? [])
+            {
+                if (penetration.WidthFeet <= 0 || penetration.HeightFeet <= 0)
+                    continue;
+
+                var penetrationX = xCursor + (penetration.XFeet * pixelsPerFoot);
+                var penetrationWidth = penetration.WidthFeet * pixelsPerFoot;
+                var penetrationY = yCursor + stripHeight - ((penetration.YFeet + penetration.HeightFeet) * pixelsPerFoot);
+                var penetrationHeight = penetration.HeightFeet * pixelsPerFoot;
+
+                var clippedLeft = Math.Max(xCursor, penetrationX);
+                var clippedRight = Math.Min(rectRight, penetrationX + penetrationWidth);
+                var clippedTop = Math.Max(yCursor, penetrationY);
+                var clippedBottom = Math.Min(rectBottom, penetrationY + penetrationHeight);
+
+                if (clippedRight <= clippedLeft || clippedBottom <= clippedTop)
+                    continue;
+
+                var clippedWidth = clippedRight - clippedLeft;
+                var clippedHeight = clippedBottom - clippedTop;
+
+                sb.AppendLine(
+                    $@"  <rect class=""penetration"" x=""{clippedLeft:F2}"" y=""{clippedTop:F2}"" width=""{clippedWidth:F2}"" height=""{clippedHeight:F2}"" fill=""{svgBackgroundColor}"" stroke=""#0f172a"" stroke-width=""1"" stroke-dasharray=""4 2"" />");
+
+                if (clippedWidth >= 38 && clippedHeight >= 16)
+                {
+                    sb.AppendLine(
+                        $@"  <text x=""{clippedLeft + (clippedWidth / 2):F2}"" y=""{clippedTop + (clippedHeight / 2) + 4:F2}"" font-family=""Arial"" font-size=""10"" text-anchor=""middle"">{EscapeXml(penetration.Id)}</text>");
+                }
+            }
 
             // Height dimension marker and label.
             var dimX = rectRight + 22;
