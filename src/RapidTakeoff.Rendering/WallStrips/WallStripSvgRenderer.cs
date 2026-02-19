@@ -28,13 +28,13 @@ public sealed class WallStripSvgRenderer
         const int leftMargin = 60;
         const int rightMargin = 60;
         const int topStart = 120;
-        const int footerPadding = 200;
         const int maxElevationHeight = 120;
         const double minPixelsPerFoot = 2.0;
         const int wallGapX = 56;
         const int rowGapY = 36;
         const int rightDimReserve = 95;
         const int drawableWidth = width - leftMargin - rightMargin;
+        const int summaryLineHeight = 20;
 
         var safeHeightFeet = Math.Max(0, dto.HeightFeet);
         var totalLengthFeet = Math.Max(1, dto.Walls.Sum(w => w.LengthFeet));
@@ -68,8 +68,17 @@ public sealed class WallStripSvgRenderer
             xCursor += (int)Math.Ceiling(blockWidth + wallGapX);
         }
 
+        var assumptions = dto.Assumptions ?? [];
         var summaryStartY = wallBottom + 50;
-        var height = Math.Max(700, summaryStartY + footerPadding);
+        var summaryBodyTopY = summaryStartY + 25;
+        var summaryLineCount = 6;
+        var summaryBottomY = summaryBodyTopY + ((summaryLineCount - 1) * summaryLineHeight);
+        var assumptionsTitleY = summaryBottomY + 36;
+        var assumptionsBodyTopY = assumptionsTitleY + 25;
+        var assumptionsLineCount = Math.Max(1, assumptions.Count);
+        var assumptionsBottomY = assumptionsBodyTopY + ((assumptionsLineCount - 1) * summaryLineHeight);
+        var bottomContentY = assumptionsBottomY;
+        var height = Math.Max(700, bottomContentY + 80);
 
         var sb = new StringBuilder(capacity: 6144);
 
@@ -77,7 +86,7 @@ public sealed class WallStripSvgRenderer
         sb.AppendLine($@"  <rect x=""0"" y=""0"" width=""{width}"" height=""{height}"" fill=""{svgBackgroundColor}"" />");
 
         // Title block
-        sb.AppendLine(@"  <text x=""50"" y=""40"" font-family=""Arial"" font-size=""24"">RapidTakeoff — Wall Strips</text>");
+        sb.AppendLine(@"  <text x=""50"" y=""40"" font-family=""Arial"" font-size=""24"">RapidTakeoff — Elevations</text>");
         sb.AppendLine($@"  <text x=""50"" y=""70"" font-family=""Arial"" font-size=""14"">Project: {EscapeXml(dto.ProjectName)}</text>");
 
         xCursor = leftMargin;
@@ -157,24 +166,41 @@ public sealed class WallStripSvgRenderer
         }
 
         sb.AppendLine($@"  <text x=""50"" y=""{summaryStartY}"" font-family=""Arial"" font-size=""16"">Summary</text>");
-        summaryStartY += 25;
+        summaryStartY = summaryBodyTopY;
 
         sb.AppendLine($@"  <text x=""50"" y=""{summaryStartY}"" font-size=""12"">Total Length: {dto.Summary.TotalLengthFeet:F2} ft</text>");
-        summaryStartY += 20;
+        summaryStartY += summaryLineHeight;
 
         sb.AppendLine($@"  <text x=""50"" y=""{summaryStartY}"" font-size=""12"">Height: {dto.HeightFeet:F2} ft</text>");
-        summaryStartY += 20;
+        summaryStartY += summaryLineHeight;
 
         sb.AppendLine($@"  <text x=""50"" y=""{summaryStartY}"" font-size=""12"">Net Area: {dto.Summary.NetAreaSqFt:F2} sq ft</text>");
-        summaryStartY += 20;
+        summaryStartY += summaryLineHeight;
 
         sb.AppendLine($@"  <text x=""50"" y=""{summaryStartY}"" font-size=""12"">Drywall Sheets: {dto.Summary.DrywallSheets}</text>");
-        summaryStartY += 20;
+        summaryStartY += summaryLineHeight;
 
         sb.AppendLine($@"  <text x=""50"" y=""{summaryStartY}"" font-size=""12"">Stud Count: {dto.Summary.StudCount}</text>");
-        summaryStartY += 20;
+        summaryStartY += summaryLineHeight;
 
         sb.AppendLine($@"  <text x=""50"" y=""{summaryStartY}"" font-size=""12"">Insulation Units: {dto.Summary.InsulationUnits}</text>");
+
+        sb.AppendLine($@"  <text x=""50"" y=""{assumptionsTitleY}"" font-family=""Arial"" font-size=""16"">Assumptions</text>");
+
+        var assumptionsY = assumptionsBodyTopY;
+        if (assumptions.Count == 0)
+        {
+            sb.AppendLine($@"  <text x=""50"" y=""{assumptionsY}"" font-size=""12"">No assumptions provided.</text>");
+        }
+        else
+        {
+            foreach (var assumption in assumptions)
+            {
+                sb.AppendLine(
+                    $@"  <text x=""50"" y=""{assumptionsY}"" font-size=""12"">{EscapeXml(assumption)}</text>");
+                assumptionsY += summaryLineHeight;
+            }
+        }
 
         sb.AppendLine("</svg>");
         return sb.ToString();

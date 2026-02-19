@@ -2,6 +2,26 @@
   "name": "Garage",
   "wallHeightFeet": 10,
   "wallLengthsFeet": [24, 24, 24, 24],
+  "penetrations": [
+    {
+      "id": "DR-01",
+      "type": "door",
+      "wallIndex": 0,
+      "xFeet": 2,
+      "yFeet": 0,
+      "widthFeet": 3,
+      "heightFeet": 7
+    },
+    {
+      "id": "WIN-01",
+      "type": "window",
+      "wallIndex": 1,
+      "xFeet": 8,
+      "yFeet": 3,
+      "widthFeet": 4,
+      "heightFeet": 3
+    }
+  ],
   "settings": {
     "drywallSheet": "4x12",
     "drywallWaste": 0.10,

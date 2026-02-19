@@ -10,11 +10,13 @@ namespace RapidTakeoff.Rendering.WallStrips;
 /// <param name="HeightFeet">Common wall height in feet.</param>
 /// <param name="Walls">Independent wall segments to render as horizontal strips.</param>
 /// <param name="Summary">Precomputed totals for the summary panel.</param>
+/// <param name="Assumptions">Optional assumptions to render beside the summary panel.</param>
 public sealed record WallStripDto(
     string ProjectName,
     double HeightFeet,
     IReadOnlyList<WallSegmentDto> Walls,
-    SummaryDto Summary
+    SummaryDto Summary,
+    IReadOnlyList<string>? Assumptions = null
 );
 
 /// <summary>

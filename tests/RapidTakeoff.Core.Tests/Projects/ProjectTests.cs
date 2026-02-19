@@ -71,6 +71,8 @@ public sealed class ProjectTests
         Assert.Equal("Garage Remodel", deserialized.Name);
         Assert.Equal(8.0, deserialized.WallHeightFeet, 10);
         Assert.Equal([12.0, 10.0, 12.0, 10.0], deserialized.WallLengthsFeet);
+        Assert.NotNull(deserialized.Penetrations);
+        Assert.Empty(deserialized.Penetrations);
         Assert.NotNull(deserialized.Settings);
         Assert.Equal("4x8", deserialized.Settings.DrywallSheet);
     }

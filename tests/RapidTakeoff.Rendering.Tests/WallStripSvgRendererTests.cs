@@ -28,7 +28,12 @@ public class WallStripSvgRendererTests
                 DrywallSheets: 6,
                 StudCount: 30,
                 InsulationUnits: 160
-            )
+            ),
+            Assumptions: new[]
+            {
+                "Stud spacing: 16 in on-center.",
+                "Drywall sheet token: 4x8."
+            }
         );
 
         var renderer = new WallStripSvgRenderer();
@@ -43,6 +48,8 @@ public class WallStripSvgRendererTests
         Assert.Contains("8.00 ft H", svg);
         Assert.Contains("12.00 ft L", svg);
         Assert.Contains("Summary", svg);
+        Assert.Contains("Assumptions", svg);
+        Assert.Contains("Stud spacing: 16 in on-center.", svg);
 
         Assert.EndsWith("</svg>", svg.Trim());
     }
