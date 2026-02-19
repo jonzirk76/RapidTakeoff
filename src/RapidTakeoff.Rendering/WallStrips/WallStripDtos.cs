@@ -10,7 +10,7 @@ namespace RapidTakeoff.Rendering.WallStrips;
 /// <param name="HeightFeet">Common wall height in feet.</param>
 /// <param name="Walls">Independent wall segments to render as horizontal strips.</param>
 /// <param name="Summary">Precomputed totals for the summary panel.</param>
-/// <param name="Assumptions">Optional assumptions to render beside the summary panel.</param>
+/// <param name="Assumptions">Optional assumptions to render near the summary panel.</param>
 public sealed record WallStripDto(
     string ProjectName,
     double HeightFeet,
@@ -25,10 +25,12 @@ public sealed record WallStripDto(
 /// <param name="Name">Wall label (e.g., "Wall A").</param>
 /// <param name="LengthFeet">Wall length in feet.</param>
 /// <param name="Penetrations">Penetrations/openings in wall-local coordinates.</param>
+/// <param name="StudLayout">Optional stud layout used for rough stud visualization.</param>
 public sealed record WallSegmentDto(
     string Name,
     double LengthFeet,
-    IReadOnlyList<PenetrationDto> Penetrations
+    IReadOnlyList<PenetrationDto> Penetrations,
+    StudLayoutDto? StudLayout = null
 );
 
 /// <summary>

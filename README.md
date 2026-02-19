@@ -61,6 +61,8 @@ Use this structure for `rapid estimate --project <file>`.
     "drywallSheet": "4x8",
     "drywallWaste": 0.10,
     "studsSpacingInches": 16,
+    "studType": "2x4",
+    "studsSubtractPenetrations": false,
     "studsWaste": 0.05,
     "insulationWaste": 0.10,
     "insulationCoverageSquareFeet": 40
@@ -87,6 +89,8 @@ Field requirements and accepted values:
 | `settings.drywallSheet` | `string` | No | Allowed values: `4x8`, `4x12` (case-insensitive, surrounding whitespace ignored). |
 | `settings.drywallWaste` | `number` | No | Finite number, `>= 0` (fraction form, e.g. `0.10` = 10%). |
 | `settings.studsSpacingInches` | `number` | No | Finite number, `> 0`. |
+| `settings.studType` | `string` | No | Allowed values: `2x4`, `2x6`, `2x8`, `2x10`, `2x12` (case-insensitive, surrounding whitespace ignored). |
+| `settings.studsSubtractPenetrations` | `boolean` | No | When `true`, stud centerlines inside penetration spans are excluded and side king studs are added at opening edges (centerline offset by half stud width). |
 | `settings.studsWaste` | `number` | No | Finite number, `>= 0` (fraction form). |
 | `settings.insulationWaste` | `number` | No | Finite number, `>= 0` (fraction form). |
 | `settings.insulationCoverageSquareFeet` | `number` | No | Finite number, `> 0`. |
@@ -98,6 +102,8 @@ Field requirements and accepted values:
 - `drywallSheet`: `4x8`
 - `drywallWaste`: `0.10`
 - `studsSpacingInches`: `16`
+- `studType`: `2x4`
+- `studsSubtractPenetrations`: `false`
 - `studsWaste`: `0.0`
 - `insulationWaste`: `0.10`
 - `insulationCoverageSquareFeet`: `40`

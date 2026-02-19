@@ -7,7 +7,7 @@
       "id": "DR-01",
       "type": "door",
       "wallIndex": 0,
-      "xFeet": 2,
+      "xFeet": 2.5,
       "yFeet": 0,
       "widthFeet": 3,
       "heightFeet": 7
@@ -16,7 +16,7 @@
       "id": "WIN-01",
       "type": "window",
       "wallIndex": 1,
-      "xFeet": 8,
+      "xFeet": 8.5,
       "yFeet": 3,
       "widthFeet": 4,
       "heightFeet": 3
@@ -26,6 +26,8 @@
     "drywallSheet": "4x12",
     "drywallWaste": 0.10,
     "studsSpacingInches": 16,
+    "studType": "2x6",
+    "studsSubtractPenetrations": true,
     "studsWaste": 0.05,
     "insulationWaste": 0.10,
     "insulationCoverageSquareFeet": 40

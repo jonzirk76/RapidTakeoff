@@ -1,4 +1,5 @@
 using System.Text;
+using RapidTakeoff.Rendering.Walls;
 
 namespace RapidTakeoff.Rendering.WallStrips;
 
@@ -28,19 +29,16 @@ public sealed class WallStripSvgRenderer
         const int leftMargin = 60;
         const int rightMargin = 60;
         const int topStart = 120;
-        const int maxElevationHeight = 120;
+        const int maxElevationHeight = 180;
         const double minPixelsPerFoot = 2.0;
-        const int wallGapX = 56;
-        const int rowGapY = 36;
+        const int rowGapY = 48;
         const int rightDimReserve = 95;
         const int drawableWidth = width - leftMargin - rightMargin;
         const int summaryLineHeight = 20;
 
         var safeHeightFeet = Math.Max(0, dto.HeightFeet);
-        var totalLengthFeet = Math.Max(1, dto.Walls.Sum(w => w.LengthFeet));
-        var totalGapWidth = wallGapX * Math.Max(0, dto.Walls.Count - 1);
-        var totalReserveWidth = rightDimReserve * dto.Walls.Count;
-        var widthPixelsPerFoot = (drawableWidth - totalGapWidth - totalReserveWidth) / totalLengthFeet;
+        var maxWallLengthFeet = Math.Max(1, dto.Walls.Max(w => w.LengthFeet));
+        var widthPixelsPerFoot = (drawableWidth - rightDimReserve) / maxWallLengthFeet;
         var heightPixelsPerFoot = safeHeightFeet > 0
             ? maxElevationHeight / safeHeightFeet
             : widthPixelsPerFoot;
@@ -50,23 +48,7 @@ public sealed class WallStripSvgRenderer
         var stripHeight = Math.Max(1, (int)Math.Round(safeHeightFeet * pixelsPerFoot));
         var wallBlockHeight = stripHeight + 62;
 
-        var xCursor = leftMargin;
-        var yCursor = topStart;
-        var wallBottom = topStart;
-
-        foreach (var wall in dto.Walls)
-        {
-            var rectWidth = wall.LengthFeet * pixelsPerFoot;
-            var blockWidth = rectWidth + rightDimReserve;
-            if (xCursor > leftMargin && xCursor + blockWidth > width - rightMargin)
-            {
-                xCursor = leftMargin;
-                yCursor += wallBlockHeight + rowGapY;
-            }
-
-            wallBottom = Math.Max(wallBottom, yCursor + wallBlockHeight);
-            xCursor += (int)Math.Ceiling(blockWidth + wallGapX);
-        }
+        var wallBottom = topStart + (dto.Walls.Count * wallBlockHeight) + (Math.Max(0, dto.Walls.Count - 1) * rowGapY);
 
         var assumptions = dto.Assumptions ?? [];
         var summaryStartY = wallBottom + 50;
@@ -89,26 +71,39 @@ public sealed class WallStripSvgRenderer
         sb.AppendLine(@"  <text x=""50"" y=""40"" font-family=""Arial"" font-size=""24"">RapidTakeoff — Elevations</text>");
         sb.AppendLine($@"  <text x=""50"" y=""70"" font-family=""Arial"" font-size=""14"">Project: {EscapeXml(dto.ProjectName)}</text>");
 
-        xCursor = leftMargin;
-        yCursor = topStart;
+        var yCursor = topStart;
 
         for (int i = 0; i < dto.Walls.Count; i++)
         {
             var wall = dto.Walls[i];
 
+            var xCursor = leftMargin;
             var rectWidth = wall.LengthFeet * pixelsPerFoot;
-            var blockWidth = rectWidth + rightDimReserve;
-            if (xCursor > leftMargin && xCursor + blockWidth > width - rightMargin)
-            {
-                xCursor = leftMargin;
-                yCursor += wallBlockHeight + rowGapY;
-            }
 
             // Wall rectangle scaled by length and common project height.
             var rectRight = xCursor + rectWidth;
             var rectBottom = yCursor + stripHeight;
             sb.AppendLine(
                 $@"  <rect x=""{xCursor}"" y=""{yCursor}"" width=""{rectWidth:F2}"" height=""{stripHeight}"" fill=""{wallFillColor}"" stroke=""#1f2937"" stroke-width=""1"" />");
+
+            // Rough stud layout: dotted centerlines inside the wall, with width mapped from stud type.
+            if (wall.StudLayout is not null && wall.StudLayout.StudCenterXFeet is not null)
+            {
+                var studWidthPx = Math.Clamp(
+                    StudTypeDisplay.GetWidthFeet(wall.StudLayout.StudType) * pixelsPerFoot * 0.35,
+                    0.8,
+                    1.4);
+
+                foreach (var centerXFeet in wall.StudLayout.StudCenterXFeet)
+                {
+                    if (centerXFeet < 0 || centerXFeet > wall.LengthFeet)
+                        continue;
+
+                    var studX = xCursor + (centerXFeet * pixelsPerFoot);
+                    sb.AppendLine(
+                        $@"  <line class=""stud"" x1=""{studX:F2}"" y1=""{yCursor}"" x2=""{studX:F2}"" y2=""{rectBottom}"" stroke=""#334155"" stroke-width=""{studWidthPx:F2}"" stroke-dasharray=""1.5 5.5"" stroke-linecap=""round"" opacity=""0.65"" />");
+                }
+            }
 
             // Penetrations rendered as white cutouts in wall-local coordinates.
             foreach (var penetration in wall.Penetrations ?? [])
@@ -133,7 +128,7 @@ public sealed class WallStripSvgRenderer
                 var clippedHeight = clippedBottom - clippedTop;
 
                 sb.AppendLine(
-                    $@"  <rect class=""penetration"" x=""{clippedLeft:F2}"" y=""{clippedTop:F2}"" width=""{clippedWidth:F2}"" height=""{clippedHeight:F2}"" fill=""{svgBackgroundColor}"" stroke=""#0f172a"" stroke-width=""1"" stroke-dasharray=""4 2"" />");
+                    $@"  <rect class=""penetration"" x=""{clippedLeft:F2}"" y=""{clippedTop:F2}"" width=""{clippedWidth:F2}"" height=""{clippedHeight:F2}"" fill=""{svgBackgroundColor}"" stroke=""#0f172a"" stroke-width=""1"" />");
 
                 if (clippedWidth >= 38 && clippedHeight >= 16)
                 {
@@ -162,7 +157,7 @@ public sealed class WallStripSvgRenderer
             sb.AppendLine(
                 $@"  <text x=""{xCursor + (rectWidth / 2):F2}"" y=""{dimY + 38}"" font-family=""Arial"" font-size=""14"" text-anchor=""middle"">{EscapeXml(wall.Name)}</text>");
 
-            xCursor += (int)Math.Ceiling(blockWidth + wallGapX);
+            yCursor += wallBlockHeight + rowGapY;
         }
 
         sb.AppendLine($@"  <text x=""50"" y=""{summaryStartY}"" font-family=""Arial"" font-size=""16"">Summary</text>");

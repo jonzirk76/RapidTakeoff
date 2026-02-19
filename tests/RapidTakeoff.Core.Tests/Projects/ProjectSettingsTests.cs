@@ -15,6 +15,8 @@ public sealed class ProjectSettingsTests
         Assert.Equal(0.10, settings.DrywallWaste, 10);
         Assert.Equal(16.0, settings.StudsSpacingInches, 10);
         Assert.Equal(0.0, settings.StudsWaste, 10);
+        Assert.Equal("2x4", settings.StudType);
+        Assert.False(settings.StudsSubtractPenetrations);
         Assert.Equal(0.10, settings.InsulationWaste, 10);
         Assert.Equal(40.0, settings.InsulationCoverageSquareFeet, 10);
     }
@@ -28,6 +30,8 @@ public sealed class ProjectSettingsTests
             DrywallWaste = 0.15,
             StudsSpacingInches = 24,
             StudsWaste = 0.05,
+            StudType = "2X6",
+            StudsSubtractPenetrations = true,
             InsulationWaste = 0.12,
             InsulationCoverageSquareFeet = 48
         };
@@ -35,6 +39,7 @@ public sealed class ProjectSettingsTests
         settings.Validate();
 
         Assert.Equal("4x12", settings.DrywallSheet);
+        Assert.Equal("2x6", settings.StudType);
     }
 
     [Fact]
@@ -49,6 +54,14 @@ public sealed class ProjectSettingsTests
     public void Validate_NegativeWaste_Throws()
     {
         var settings = new ProjectSettings { DrywallWaste = -0.01 };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => settings.Validate());
+    }
+
+    [Fact]
+    public void Validate_InvalidStudType_Throws()
+    {
+        var settings = new ProjectSettings { StudType = "3x4" };
 
         Assert.Throws<ArgumentOutOfRangeException>(() => settings.Validate());
     }
@@ -70,6 +83,8 @@ public sealed class ProjectSettingsTests
             DrywallWaste = 0.2,
             StudsSpacingInches = 24,
             StudsWaste = 0.05,
+            StudType = "2x8",
+            StudsSubtractPenetrations = true,
             InsulationWaste = 0.08,
             InsulationCoverageSquareFeet = 55
         };
@@ -82,6 +97,8 @@ public sealed class ProjectSettingsTests
         Assert.Equal(0.2, deserialized.DrywallWaste, 10);
         Assert.Equal(24, deserialized.StudsSpacingInches, 10);
         Assert.Equal(0.05, deserialized.StudsWaste, 10);
+        Assert.Equal("2x8", deserialized.StudType);
+        Assert.True(deserialized.StudsSubtractPenetrations);
         Assert.Equal(0.08, deserialized.InsulationWaste, 10);
         Assert.Equal(55, deserialized.InsulationCoverageSquareFeet, 10);
     }
