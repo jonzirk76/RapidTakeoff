@@ -1,4 +1,5 @@
 using RapidTakeoff.Rendering.WallStrips;
+using RapidTakeoff.Rendering.Walls;
 
 namespace RapidTakeoff.Rendering.Tests;
 
@@ -18,8 +19,8 @@ public class WallStripSvgRendererTests
             HeightFeet: 8,
             Walls: new[]
             {
-                new WallSegmentDto("Wall 1", 12),
-                new WallSegmentDto("Wall 2", 8)
+                new WallSegmentDto("Wall 1", 12, []),
+                new WallSegmentDto("Wall 2", 8, [])
             },
             Summary: new SummaryDto(
                 TotalLengthFeet: 20,
@@ -27,14 +28,19 @@ public class WallStripSvgRendererTests
                 DrywallSheets: 6,
                 StudCount: 30,
                 InsulationUnits: 160
-            )
+            ),
+            Assumptions: new[]
+            {
+                "Stud spacing: 16 in on-center.",
+                "Drywall sheet token: 4x8."
+            }
         );
 
         var renderer = new WallStripSvgRenderer();
         var svg = renderer.Render(dto);
 
         Assert.Contains("<svg", svg);
-        Assert.Contains("RapidTakeoff — Wall Strips", svg);
+        Assert.Contains("RapidTakeoff — Elevations", svg);
         Assert.Contains("Project: Test Project", svg);
 
         Assert.Contains("<rect", svg);
@@ -42,7 +48,91 @@ public class WallStripSvgRendererTests
         Assert.Contains("8.00 ft H", svg);
         Assert.Contains("12.00 ft L", svg);
         Assert.Contains("Summary", svg);
+        Assert.Contains("Assumptions", svg);
+        Assert.Contains("Stud spacing: 16 in on-center.", svg);
 
         Assert.EndsWith("</svg>", svg.Trim());
+    }
+
+    /// <summary>
+    /// Verifies that penetrations are rendered as wall cutouts with an identifier label.
+    /// </summary>
+    [Fact]
+    public void Render_With_Penetration_Should_Render_Cutout()
+    {
+        var dto = new WallStripDto(
+            ProjectName: "Penetration Project",
+            HeightFeet: 8,
+            Walls: new[]
+            {
+                new WallSegmentDto(
+                    "Wall 1",
+                    12,
+                    new[]
+                    {
+                        new PenetrationDto("WIN-01", "window", 3, 3, 4, 3)
+                    },
+                    new StudLayoutDto(
+                        StudTypeDto.TwoBySix,
+                        16,
+                        new[] { 0.0, 1.3333333333, 2.6666666667, 4.0, 5.3333333333, 6.6666666667, 8.0, 9.3333333333, 10.6666666667, 12.0 }))
+            },
+            Summary: new SummaryDto(
+                TotalLengthFeet: 12,
+                NetAreaSqFt: 96,
+                DrywallSheets: 4,
+                StudCount: 15,
+                InsulationUnits: 96
+            )
+        );
+
+        var renderer = new WallStripSvgRenderer();
+        var svg = renderer.Render(dto);
+
+        Assert.Contains(@"class=""penetration""", svg);
+        Assert.Contains("WIN-01", svg);
+        Assert.DoesNotMatch(@"class=""penetration""[^>]*stroke-dasharray=", svg);
+        Assert.Contains(@"class=""trimmer""", svg);
+        Assert.Contains(@"class=""king""", svg);
+        Assert.Contains(@"class=""header""", svg);
+        Assert.Contains(@"class=""sill""", svg);
+        Assert.Contains(@"class=""cripple-top""", svg);
+        Assert.Contains(@"class=""cripple-bottom""", svg);
+    }
+
+    /// <summary>
+    /// Verifies stud lines render as dotted interior lines with width derived from stud type.
+    /// </summary>
+    [Fact]
+    public void Render_With_StudLayout_Should_Render_DottedStudLines()
+    {
+        var dto = new WallStripDto(
+            ProjectName: "Stud Project",
+            HeightFeet: 8,
+            Walls: new[]
+            {
+                new WallSegmentDto(
+                    "Wall 1",
+                    12,
+                    [],
+                    new StudLayoutDto(
+                        StudTypeDto.TwoBySix,
+                        16,
+                        new[] { 0.0, 1.3333333333, 2.6666666667, 12.0 }))
+            },
+            Summary: new SummaryDto(
+                TotalLengthFeet: 12,
+                NetAreaSqFt: 96,
+                DrywallSheets: 4,
+                StudCount: 15,
+                InsulationUnits: 96
+            )
+        );
+
+        var renderer = new WallStripSvgRenderer();
+        var svg = renderer.Render(dto);
+
+        Assert.Contains(@"class=""stud""", svg);
+        Assert.Contains(@"stroke-dasharray=""1.5 5.5""", svg);
     }
 }

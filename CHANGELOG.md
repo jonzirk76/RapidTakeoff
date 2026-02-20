@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.4.0
+### Added
+- Penetration-aware project model and validation (bounds checks, friendly errors, overlap warnings).
+- Net-area math now uses gross minus merged penetration area.
+- Elevation rendering for penetrations with opening framing visuals:
+  - king studs, trimmers, headers, sills, and top/bottom cripples.
+- Framed stud planning and category-aware stud totals (common, king, trimmer, cripple).
+- New core framing planner tests covering door/window logic and regression behavior.
+
+### Changed
+- SVG output title updated from wall strips to elevations.
+- Elevation layout now renders one larger wall per row for clearer detail.
+- Assumptions are rendered in SVG below the summary block.
+- Stud framing behavior at openings is now default (no feature flag).
+
 ## v0.3.0
 ### Added
 - Wall strip output has been upgraded to full elevations by applying height rendering.  Dimension lines have been added to each elevation.

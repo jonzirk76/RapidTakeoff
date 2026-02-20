@@ -6,6 +6,7 @@
     "drywallSheet": "4x8",
     "drywallWaste": 0.10,
     "studsSpacingInches": 16,
+    "studType": "2x4",
     "studsWaste": 0.05,
     "insulationWaste": 0.10,
     "insulationCoverageSquareFeet": 40

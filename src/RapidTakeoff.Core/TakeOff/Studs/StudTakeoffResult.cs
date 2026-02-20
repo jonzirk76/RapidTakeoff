@@ -5,7 +5,7 @@ namespace RapidTakeoff.Core.Takeoff.Studs;
 /// <summary>
 /// Result of a stud takeoff calculation.
 /// </summary>
-public sealed class StudTakeoffResult
+public class StudTakeoffResult
 {
     /// <summary>
     /// Gets the stud spacing used (inches).

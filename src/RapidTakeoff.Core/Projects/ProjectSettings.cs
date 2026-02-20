@@ -26,6 +26,11 @@ public sealed class ProjectSettings
     public double StudsWaste { get; set; } = 0.0;
 
     /// <summary>
+    /// Gets or sets the nominal stud type token (e.g., <c>2x4</c>, <c>2x6</c>).
+    /// </summary>
+    public string StudType { get; set; } = "2x4";
+
+    /// <summary>
     /// Gets or sets the insulation waste factor as a fraction (e.g., 0.10 for 10%).
     /// </summary>
     public double InsulationWaste { get; set; } = 0.10;
@@ -47,6 +52,13 @@ public sealed class ProjectSettings
         if (normalizedSheet is not ("4x8" or "4x12"))
             throw new ArgumentOutOfRangeException(nameof(DrywallSheet), "Drywall sheet must be '4x8' or '4x12'.");
 
+        if (string.IsNullOrWhiteSpace(StudType))
+            throw new ArgumentOutOfRangeException(nameof(StudType), "Stud type is required.");
+
+        var normalizedStudType = StudType.Trim().ToLowerInvariant();
+        if (normalizedStudType is not ("2x4" or "2x6" or "2x8" or "2x10" or "2x12"))
+            throw new ArgumentOutOfRangeException(nameof(StudType), "Stud type must be one of: 2x4, 2x6, 2x8, 2x10, 2x12.");
+
         ValidateFiniteNonNegative(DrywallWaste, nameof(DrywallWaste));
         ValidateFiniteNonNegative(StudsWaste, nameof(StudsWaste));
         ValidateFiniteNonNegative(InsulationWaste, nameof(InsulationWaste));
@@ -55,6 +67,7 @@ public sealed class ProjectSettings
         ValidateFinitePositive(InsulationCoverageSquareFeet, nameof(InsulationCoverageSquareFeet));
 
         DrywallSheet = normalizedSheet;
+        StudType = normalizedStudType;
     }
 
     private static void ValidateFiniteNonNegative(double value, string paramName)

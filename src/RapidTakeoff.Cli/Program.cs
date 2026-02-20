@@ -8,6 +8,7 @@ using RapidTakeoff.Core.Takeoff.Insulation;
 using RapidTakeoff.Core.Takeoff.Studs;
 using RapidTakeoff.Core.Units;
 using RapidTakeoff.Rendering.WallStrips;
+using RapidTakeoff.Rendering.Walls;
 
 namespace RapidTakeoff.Cli;
 
@@ -121,7 +122,7 @@ public static class Program
         Console.WriteLine("  --project <path>             Path to project JSON file (required)");
         Console.WriteLine("  --format <text|csv|svg>      Output format (default: text)");
         Console.WriteLine("  --out <path>                 Required when --format svg (output .svg path)");
-        Console.WriteLine("                               SVG writes a wall-strip diagram to the --out file");
+        Console.WriteLine("                               SVG writes a wall elevations diagram to the --out file");
         Console.WriteLine();
     }
 
@@ -417,13 +418,11 @@ public static class Program
             throw new InvalidOperationException("Project file could not be parsed.");
 
         project.Validate();
+        var validationWarnings = project.GetValidationWarnings();
 
-        var wallLengths = project.WallLengthsFeet
-            .Select(Length.FromFeet)
-            .ToArray();
-        var height = Length.FromFeet(project.WallHeightFeet);
-        var totalLength = wallLengths.Aggregate(Length.FromFeet(0), (acc, x) => acc + x);
-        var netArea = Area.FromRectangle(totalLength, height);
+        var grossAreaSqFt = project.GetGrossWallAreaSquareFeet();
+        var penetrationAreaSqFt = project.GetPenetrationAreaSquareFeet();
+        var netArea = Area.FromSquareFeet(project.GetNetWallAreaSquareFeet());
 
         var sheet = project.Settings.DrywallSheet switch
         {
@@ -433,10 +432,8 @@ public static class Program
         };
 
         var drywall = DrywallTakeoffCalculator.Calculate(netArea, sheet, project.Settings.DrywallWaste);
-        var studs = StudTakeoffCalculator.Calculate(
-            wallLengths,
-            Length.FromInches(project.Settings.StudsSpacingInches),
-            project.Settings.StudsWaste);
+        var studPlansByWall = BuildStudPlansByWall(project);
+        var studs = BuildStudTakeoffResult(project.Settings, studPlansByWall);
         var insulation = InsulationTakeoffCalculator.Calculate(
             netArea,
             new InsulationProduct(Area.FromSquareFeet(project.Settings.InsulationCoverageSquareFeet), "Insulation"),
@@ -444,9 +441,9 @@ public static class Program
 
         return formatToken switch
         {
-            "text" => PrintEstimateText(project, netArea, drywall, studs, insulation),
-            "csv" => PrintEstimateCsv(project, netArea, drywall, studs, insulation),
-            "svg" => PrintEstimateSvg(project, netArea, drywall, studs, insulation, svgOutputPath!),
+            "text" => PrintEstimateText(project, netArea, grossAreaSqFt, penetrationAreaSqFt, validationWarnings, drywall, studs, insulation),
+            "csv" => PrintEstimateCsv(project, netArea, grossAreaSqFt, penetrationAreaSqFt, validationWarnings, drywall, studs, insulation),
+            "svg" => PrintEstimateSvg(project, netArea, grossAreaSqFt, penetrationAreaSqFt, validationWarnings, drywall, studs, studPlansByWall, insulation, svgOutputPath!),
             _ => throw new ArgumentOutOfRangeException("--format", "Format must be 'text', 'csv', or 'svg'.")
         };
     }
@@ -454,6 +451,9 @@ public static class Program
     private static int PrintEstimateText(
         Project project,
         Area netArea,
+        double grossAreaSqFt,
+        double penetrationAreaSqFt,
+        IReadOnlyList<string> validationWarnings,
         DrywallTakeoffResult drywall,
         StudTakeoffResult studs,
         InsulationTakeoffResult insulation)
@@ -467,14 +467,45 @@ public static class Program
         Console.WriteLine($"  Drywall sheet: {project.Settings.DrywallSheet}");
         Console.WriteLine($"  Drywall waste: {project.Settings.DrywallWaste:0.###}");
         Console.WriteLine($"  Stud spacing (in): {project.Settings.StudsSpacingInches:0.###}");
+        Console.WriteLine($"  Stud type: {project.Settings.StudType}");
         Console.WriteLine($"  Stud waste: {project.Settings.StudsWaste:0.###}");
         Console.WriteLine($"  Insulation coverage (sqft): {project.Settings.InsulationCoverageSquareFeet:0.###}");
         Console.WriteLine($"  Insulation waste: {project.Settings.InsulationWaste:0.###}");
         Console.WriteLine();
+        Console.WriteLine("Assumptions");
+        Console.WriteLine("  Gross wall area = sum(wallLengthsFeet) * wallHeightFeet.");
+        Console.WriteLine("  Net wall area = gross wall area - merged penetration area (overlaps are not double-counted).");
+        Console.WriteLine($"  Stud spacing = {project.Settings.StudsSpacingInches:0.###} in on-center.");
+        Console.WriteLine($"  Stud type = {project.Settings.StudType}.");
+        Console.WriteLine("  Studs are removed from framed opening zones and king studs are added at opening sides.");
+        Console.WriteLine($"  Drywall sheet size = {drywall.Sheet.Width.TotalFeet:0.###}x{drywall.Sheet.Height.TotalFeet:0.###} ft.");
+        Console.WriteLine($"  Drywall waste factor = {project.Settings.DrywallWaste:0.###}.");
+        Console.WriteLine($"  Insulation coverage = {project.Settings.InsulationCoverageSquareFeet:0.###} sqft per unit.");
+        Console.WriteLine($"  Insulation waste factor = {project.Settings.InsulationWaste:0.###}.");
+
+        if (validationWarnings.Count > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Warnings");
+            foreach (var warning in validationWarnings)
+                Console.WriteLine($"  - {warning}");
+        }
+
+        Console.WriteLine();
         Console.WriteLine("Results");
+        Console.WriteLine($"  Wall gross area: {grossAreaSqFt:0.###} sqft");
+        Console.WriteLine($"  Penetration area: {penetrationAreaSqFt:0.###} sqft");
         Console.WriteLine($"  Wall net area: {netArea.TotalSquareFeet:0.###} sqft");
         Console.WriteLine($"  Drywall sheets: {drywall.SheetCount} sheets ({drywall.Sheet.Width.TotalFeet:0.###}x{drywall.Sheet.Height.TotalFeet:0.###})");
         Console.WriteLine($"  Studs: {studs.TotalStuds} studs (base {studs.BaseStuds})");
+        if (studs is FramedStudTakeoffResult framedStuds)
+        {
+            Console.WriteLine($"    Common: {framedStuds.CommonStuds}");
+            Console.WriteLine($"    Kings: {framedStuds.KingStuds}");
+            Console.WriteLine($"    Trimmers: {framedStuds.TrimmerStuds}");
+            Console.WriteLine($"    Cripple (top): {framedStuds.CrippleTopStuds}");
+            Console.WriteLine($"    Cripple (bottom): {framedStuds.CrippleBottomStuds}");
+        }
         Console.WriteLine($"  Insulation: {insulation.Quantity} units");
         Console.WriteLine("========================================");
         return 0;
@@ -483,30 +514,65 @@ public static class Program
     private static int PrintEstimateCsv(
         Project project,
         Area netArea,
+        double grossAreaSqFt,
+        double penetrationAreaSqFt,
+        IReadOnlyList<string> validationWarnings,
         DrywallTakeoffResult drywall,
         StudTakeoffResult studs,
         InsulationTakeoffResult insulation)
     {
         Console.WriteLine("Category,Item,Quantity,Unit,Notes");
         Console.WriteLine($"Project,Name,1,project,\"{EscapeCsv(project.Name)}\"");
-        Console.WriteLine($"Area,Wall Net Area,{netArea.TotalSquareFeet:0.###},sqft,\"sum(lengths)*height\"");
+        Console.WriteLine($"Area,Wall Gross Area,{grossAreaSqFt:0.###},sqft,\"sum(lengths)*height\"");
+        Console.WriteLine($"Area,Penetration Area,{penetrationAreaSqFt:0.###},sqft,\"merged area per wall; overlaps not double-counted\"");
+        Console.WriteLine($"Area,Wall Net Area,{netArea.TotalSquareFeet:0.###},sqft,\"gross-openings\"");
+        Console.WriteLine($"Assumptions,Stud Spacing,{project.Settings.StudsSpacingInches:0.###},in,\"on-center\"");
+        Console.WriteLine($"Assumptions,Stud Type,1,type,\"{EscapeCsv(project.Settings.StudType)}\"");
+        Console.WriteLine("Assumptions,Opening Framing Behavior,always,mode,\"exclude framed opening zone; add king studs\"");
+        Console.WriteLine($"Assumptions,Drywall Sheet,1,sheet,\"{drywall.Sheet.Width.TotalFeet:0.###}x{drywall.Sheet.Height.TotalFeet:0.###} ft\"");
+        Console.WriteLine($"Assumptions,Drywall Waste,{project.Settings.DrywallWaste:0.###},fraction,\"\"");
+        Console.WriteLine($"Assumptions,Insulation Coverage,{project.Settings.InsulationCoverageSquareFeet:0.###},sqft-per-unit,\"\"");
+        Console.WriteLine($"Assumptions,Insulation Waste,{project.Settings.InsulationWaste:0.###},fraction,\"\"");
         Console.WriteLine($"Drywall,Sheet {drywall.Sheet.Width.TotalFeet:0.###}x{drywall.Sheet.Height.TotalFeet:0.###},{drywall.SheetCount},sheets,\"waste={drywall.WasteFactor:0.###}\"");
-        Console.WriteLine($"Studs,Framing Stud,{studs.TotalStuds},studs,\"base={studs.BaseStuds}; spacing-in={studs.Spacing.TotalInches:0.###}; waste={studs.WasteFactor:0.###}\"");
+        if (studs is FramedStudTakeoffResult framedStuds)
+        {
+            Console.WriteLine($"Studs,Framing Stud,{studs.TotalStuds},studs,\"base={studs.BaseStuds}; spacing-in={studs.Spacing.TotalInches:0.###}; waste={studs.WasteFactor:0.###}; common={framedStuds.CommonStuds}; king={framedStuds.KingStuds}; trimmer={framedStuds.TrimmerStuds}; cripple-top={framedStuds.CrippleTopStuds}; cripple-bottom={framedStuds.CrippleBottomStuds}\"");
+        }
+        else
+        {
+            Console.WriteLine($"Studs,Framing Stud,{studs.TotalStuds},studs,\"base={studs.BaseStuds}; spacing-in={studs.Spacing.TotalInches:0.###}; waste={studs.WasteFactor:0.###}\"");
+        }
         Console.WriteLine($"Insulation,Insulation Unit,{insulation.Quantity},units,\"coverage-sqft={insulation.Product.CoverageArea.TotalSquareFeet:0.###}; waste={insulation.WasteFactor:0.###}\"");
+        foreach (var warning in validationWarnings)
+            Console.WriteLine($"Warnings,Validation Warning,1,warning,\"{EscapeCsv(warning)}\"");
         return 0;
     }
 
     private static int PrintEstimateSvg(
         Project project,
         Area netArea,
+        double grossAreaSqFt,
+        double penetrationAreaSqFt,
+        IReadOnlyList<string> validationWarnings,
         DrywallTakeoffResult drywall,
         StudTakeoffResult studs,
+        IReadOnlyList<WallStudPlan> studPlansByWall,
         InsulationTakeoffResult insulation,
         string outputPath)
     {
         var projectName = string.IsNullOrWhiteSpace(project.Name) ? "Untitled" : project.Name;
+        var penetrationsByWall = project.Penetrations
+            .GroupBy(p => p.WallIndex)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<PenetrationDto>)g.Select(ToRenderingPenetration).ToArray());
+
         var walls = project.WallLengthsFeet
-            .Select((length, index) => new WallSegmentDto($"Wall {index + 1}", length))
+            .Select((length, index) => new WallSegmentDto(
+                $"Wall {index + 1}",
+                length,
+                penetrationsByWall.TryGetValue(index, out var items) ? items : [],
+                BuildStudLayoutFromPlan(project.Settings, studPlansByWall[index])))
             .ToArray();
 
         var summary = new SummaryDto(
@@ -515,20 +581,165 @@ public static class Program
             drywall.SheetCount,
             studs.TotalStuds,
             insulation.Quantity);
+        var assumptions = BuildAssumptions(project, grossAreaSqFt, penetrationAreaSqFt);
 
         var dto = new WallStripDto(
             projectName,
             project.WallHeightFeet,
             walls,
-            summary);
+            summary,
+            assumptions);
 
         var renderer = new WallStripSvgRenderer();
         var svg = renderer.Render(dto);
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
         File.WriteAllText(outputPath, svg, Encoding.UTF8);
+        PrintAssumptionsBlock(assumptions);
+        if (validationWarnings.Count > 0)
+        {
+            Console.WriteLine("Warnings");
+            foreach (var warning in validationWarnings)
+                Console.WriteLine($"  - {warning}");
+        }
         Console.WriteLine($"Wrote SVG: {outputPath}");
         return 0;
+    }
+
+    private static IReadOnlyList<string> BuildAssumptions(Project project, double grossAreaSqFt, double penetrationAreaSqFt)
+    {
+        return
+        [
+            $"Gross wall area formula: sum(lengths) * height = {grossAreaSqFt:0.###} sqft.",
+            $"Penetration deduction uses merged opening area per wall = {penetrationAreaSqFt:0.###} sqft.",
+            $"Net wall area formula: gross - penetrations = {grossAreaSqFt - penetrationAreaSqFt:0.###} sqft.",
+            $"Stud spacing: {project.Settings.StudsSpacingInches:0.###} in on-center.",
+            $"Stud type: {project.Settings.StudType}.",
+            "Studs inside framed opening zones are removed.",
+            "King studs are then added at opening sides using centerline +/- 1.5 stud widths.",
+            $"Drywall sheet token: {project.Settings.DrywallSheet}.",
+            $"Drywall waste factor: {project.Settings.DrywallWaste:0.###}.",
+            $"Insulation coverage: {project.Settings.InsulationCoverageSquareFeet:0.###} sqft per unit.",
+            $"Insulation waste factor: {project.Settings.InsulationWaste:0.###}."
+        ];
+    }
+
+    private static void PrintAssumptionsBlock(IReadOnlyList<string> assumptions)
+    {
+        Console.WriteLine("Assumptions");
+        foreach (var assumption in assumptions)
+            Console.WriteLine($"  {assumption}");
+    }
+
+    private static PenetrationDto ToRenderingPenetration(ProjectPenetration penetration)
+    {
+        var id = string.IsNullOrWhiteSpace(penetration.Id)
+            ? $"OPEN-{penetration.WallIndex + 1:00}"
+            : penetration.Id;
+        var type = string.IsNullOrWhiteSpace(penetration.Type) ? "opening" : penetration.Type;
+        return new PenetrationDto(
+            id,
+            type,
+            penetration.XFeet,
+            penetration.YFeet,
+            penetration.WidthFeet,
+            penetration.HeightFeet);
+    }
+
+    private static IReadOnlyList<WallStudPlan> BuildStudPlansByWall(Project project)
+    {
+        var plansByWall = new List<WallStudPlan>(project.WallLengthsFeet.Length);
+
+        for (var wallIndex = 0; wallIndex < project.WallLengthsFeet.Length; wallIndex++)
+        {
+            var wallLength = project.WallLengthsFeet[wallIndex];
+            var wallHeight = project.WallHeightFeet;
+            var studWidthFeet = StudTypeDisplay.GetWidthFeet(ToStudTypeDto(project.Settings.StudType));
+            var openings = project.Penetrations
+                .Where(p => p.WallIndex == wallIndex)
+                .Select(p => new StudOpening(p.XFeet, p.YFeet, p.WidthFeet, p.HeightFeet))
+                .ToArray();
+
+            var framedPlan = FramedStudPlanner.BuildWallPlan(
+                wallLength,
+                wallHeight,
+                project.Settings.StudsSpacingInches,
+                studWidthFeet,
+                openings);
+
+            plansByWall.Add(new WallStudPlan(
+                framedPlan.NominalCenters,
+                framedPlan.CommonCenters,
+                framedPlan.KingCenters,
+                framedPlan.FinalCenters,
+                framedPlan.TrimmerCount,
+                framedPlan.CrippleTopCount,
+                framedPlan.CrippleBottomCount));
+        }
+
+        return plansByWall;
+    }
+
+    private static StudTakeoffResult BuildStudTakeoffResult(ProjectSettings settings, IReadOnlyList<WallStudPlan> studPlansByWall)
+    {
+        var spacing = Length.FromInches(settings.StudsSpacingInches);
+        var studsPerWall = studPlansByWall.Select(c => c.BaseStudCount).ToArray();
+        var baseStuds = studsPerWall.Sum();
+        var totalStuds = baseStuds <= 0
+            ? 0
+            : (int)Math.Ceiling(baseStuds * (1.0 + settings.StudsWaste));
+
+        var commonStuds = studPlansByWall.Sum(c => c.CommonCenters.Count);
+        var kingStuds = studPlansByWall.Sum(c => c.KingCenters.Count);
+        var trimmerStuds = studPlansByWall.Sum(c => c.TrimmerCount);
+        var crippleTopStuds = studPlansByWall.Sum(c => c.CrippleTopCount);
+        var crippleBottomStuds = studPlansByWall.Sum(c => c.CrippleBottomCount);
+
+        return new FramedStudTakeoffResult(
+            spacing,
+            settings.StudsWaste,
+            baseStuds,
+            totalStuds,
+            studsPerWall,
+            commonStuds,
+            kingStuds,
+            trimmerStuds,
+            crippleTopStuds,
+            crippleBottomStuds);
+    }
+
+    private static StudLayoutDto BuildStudLayoutFromPlan(ProjectSettings settings, WallStudPlan plan)
+    {
+        return new StudLayoutDto(
+            ToStudTypeDto(settings.StudType),
+            settings.StudsSpacingInches,
+            plan.FinalCenters,
+            plan.NominalCenters);
+    }
+
+    private readonly record struct WallStudPlan(
+        IReadOnlyList<double> NominalCenters,
+        IReadOnlyList<double> CommonCenters,
+        IReadOnlyList<double> KingCenters,
+        IReadOnlyList<double> FinalCenters,
+        int TrimmerCount,
+        int CrippleTopCount,
+        int CrippleBottomCount)
+    {
+        public int BaseStudCount => FinalCenters.Count + TrimmerCount + CrippleTopCount + CrippleBottomCount;
+    }
+
+    private static StudTypeDto ToStudTypeDto(string studTypeToken)
+    {
+        return studTypeToken.Trim().ToLowerInvariant() switch
+        {
+            "2x4" => StudTypeDto.TwoByFour,
+            "2x6" => StudTypeDto.TwoBySix,
+            "2x8" => StudTypeDto.TwoByEight,
+            "2x10" => StudTypeDto.TwoByTen,
+            "2x12" => StudTypeDto.TwoByTwelve,
+            _ => throw new ArgumentOutOfRangeException(nameof(studTypeToken), "Stud type must be one of: 2x4, 2x6, 2x8, 2x10, 2x12.")
+        };
     }
 
     private static string EscapeCsv(string value)
