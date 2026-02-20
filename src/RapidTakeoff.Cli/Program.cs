@@ -432,8 +432,8 @@ public static class Program
         };
 
         var drywall = DrywallTakeoffCalculator.Calculate(netArea, sheet, project.Settings.DrywallWaste);
-        var studCentersByWall = BuildStudCentersByWall(project);
-        var studs = BuildStudTakeoffResult(project.Settings, studCentersByWall);
+        var studPlansByWall = BuildStudPlansByWall(project);
+        var studs = BuildStudTakeoffResult(project.Settings, studPlansByWall);
         var insulation = InsulationTakeoffCalculator.Calculate(
             netArea,
             new InsulationProduct(Area.FromSquareFeet(project.Settings.InsulationCoverageSquareFeet), "Insulation"),
@@ -443,7 +443,7 @@ public static class Program
         {
             "text" => PrintEstimateText(project, netArea, grossAreaSqFt, penetrationAreaSqFt, validationWarnings, drywall, studs, insulation),
             "csv" => PrintEstimateCsv(project, netArea, grossAreaSqFt, penetrationAreaSqFt, validationWarnings, drywall, studs, insulation),
-            "svg" => PrintEstimateSvg(project, netArea, grossAreaSqFt, penetrationAreaSqFt, validationWarnings, drywall, studs, studCentersByWall, insulation, svgOutputPath!),
+            "svg" => PrintEstimateSvg(project, netArea, grossAreaSqFt, penetrationAreaSqFt, validationWarnings, drywall, studs, studPlansByWall, insulation, svgOutputPath!),
             _ => throw new ArgumentOutOfRangeException("--format", "Format must be 'text', 'csv', or 'svg'.")
         };
     }
@@ -468,7 +468,6 @@ public static class Program
         Console.WriteLine($"  Drywall waste: {project.Settings.DrywallWaste:0.###}");
         Console.WriteLine($"  Stud spacing (in): {project.Settings.StudsSpacingInches:0.###}");
         Console.WriteLine($"  Stud type: {project.Settings.StudType}");
-        Console.WriteLine($"  Subtract studs at penetrations: {(project.Settings.StudsSubtractPenetrations ? "yes" : "no")}");
         Console.WriteLine($"  Stud waste: {project.Settings.StudsWaste:0.###}");
         Console.WriteLine($"  Insulation coverage (sqft): {project.Settings.InsulationCoverageSquareFeet:0.###}");
         Console.WriteLine($"  Insulation waste: {project.Settings.InsulationWaste:0.###}");
@@ -478,8 +477,7 @@ public static class Program
         Console.WriteLine("  Net wall area = gross wall area - merged penetration area (overlaps are not double-counted).");
         Console.WriteLine($"  Stud spacing = {project.Settings.StudsSpacingInches:0.###} in on-center.");
         Console.WriteLine($"  Stud type = {project.Settings.StudType}.");
-        Console.WriteLine($"  Stud subtraction at penetrations = {(project.Settings.StudsSubtractPenetrations ? "enabled" : "disabled")}.");
-        Console.WriteLine("  When enabled, king studs are added at opening sides using centerline +/- half stud width.");
+        Console.WriteLine("  Studs are removed from framed opening zones and king studs are added at opening sides.");
         Console.WriteLine($"  Drywall sheet size = {drywall.Sheet.Width.TotalFeet:0.###}x{drywall.Sheet.Height.TotalFeet:0.###} ft.");
         Console.WriteLine($"  Drywall waste factor = {project.Settings.DrywallWaste:0.###}.");
         Console.WriteLine($"  Insulation coverage = {project.Settings.InsulationCoverageSquareFeet:0.###} sqft per unit.");
@@ -500,6 +498,14 @@ public static class Program
         Console.WriteLine($"  Wall net area: {netArea.TotalSquareFeet:0.###} sqft");
         Console.WriteLine($"  Drywall sheets: {drywall.SheetCount} sheets ({drywall.Sheet.Width.TotalFeet:0.###}x{drywall.Sheet.Height.TotalFeet:0.###})");
         Console.WriteLine($"  Studs: {studs.TotalStuds} studs (base {studs.BaseStuds})");
+        if (studs is FramedStudTakeoffResult framedStuds)
+        {
+            Console.WriteLine($"    Common: {framedStuds.CommonStuds}");
+            Console.WriteLine($"    Kings: {framedStuds.KingStuds}");
+            Console.WriteLine($"    Trimmers: {framedStuds.TrimmerStuds}");
+            Console.WriteLine($"    Cripple (top): {framedStuds.CrippleTopStuds}");
+            Console.WriteLine($"    Cripple (bottom): {framedStuds.CrippleBottomStuds}");
+        }
         Console.WriteLine($"  Insulation: {insulation.Quantity} units");
         Console.WriteLine("========================================");
         return 0;
@@ -522,13 +528,20 @@ public static class Program
         Console.WriteLine($"Area,Wall Net Area,{netArea.TotalSquareFeet:0.###},sqft,\"gross-openings\"");
         Console.WriteLine($"Assumptions,Stud Spacing,{project.Settings.StudsSpacingInches:0.###},in,\"on-center\"");
         Console.WriteLine($"Assumptions,Stud Type,1,type,\"{EscapeCsv(project.Settings.StudType)}\"");
-        Console.WriteLine($"Assumptions,Stud Subtract Penetrations,{(project.Settings.StudsSubtractPenetrations ? "true" : "false")},flag,\"centerline-span rule\"");
+        Console.WriteLine("Assumptions,Opening Framing Behavior,always,mode,\"exclude framed opening zone; add king studs\"");
         Console.WriteLine($"Assumptions,Drywall Sheet,1,sheet,\"{drywall.Sheet.Width.TotalFeet:0.###}x{drywall.Sheet.Height.TotalFeet:0.###} ft\"");
         Console.WriteLine($"Assumptions,Drywall Waste,{project.Settings.DrywallWaste:0.###},fraction,\"\"");
         Console.WriteLine($"Assumptions,Insulation Coverage,{project.Settings.InsulationCoverageSquareFeet:0.###},sqft-per-unit,\"\"");
         Console.WriteLine($"Assumptions,Insulation Waste,{project.Settings.InsulationWaste:0.###},fraction,\"\"");
         Console.WriteLine($"Drywall,Sheet {drywall.Sheet.Width.TotalFeet:0.###}x{drywall.Sheet.Height.TotalFeet:0.###},{drywall.SheetCount},sheets,\"waste={drywall.WasteFactor:0.###}\"");
-        Console.WriteLine($"Studs,Framing Stud,{studs.TotalStuds},studs,\"base={studs.BaseStuds}; spacing-in={studs.Spacing.TotalInches:0.###}; waste={studs.WasteFactor:0.###}\"");
+        if (studs is FramedStudTakeoffResult framedStuds)
+        {
+            Console.WriteLine($"Studs,Framing Stud,{studs.TotalStuds},studs,\"base={studs.BaseStuds}; spacing-in={studs.Spacing.TotalInches:0.###}; waste={studs.WasteFactor:0.###}; common={framedStuds.CommonStuds}; king={framedStuds.KingStuds}; trimmer={framedStuds.TrimmerStuds}; cripple-top={framedStuds.CrippleTopStuds}; cripple-bottom={framedStuds.CrippleBottomStuds}\"");
+        }
+        else
+        {
+            Console.WriteLine($"Studs,Framing Stud,{studs.TotalStuds},studs,\"base={studs.BaseStuds}; spacing-in={studs.Spacing.TotalInches:0.###}; waste={studs.WasteFactor:0.###}\"");
+        }
         Console.WriteLine($"Insulation,Insulation Unit,{insulation.Quantity},units,\"coverage-sqft={insulation.Product.CoverageArea.TotalSquareFeet:0.###}; waste={insulation.WasteFactor:0.###}\"");
         foreach (var warning in validationWarnings)
             Console.WriteLine($"Warnings,Validation Warning,1,warning,\"{EscapeCsv(warning)}\"");
@@ -543,7 +556,7 @@ public static class Program
         IReadOnlyList<string> validationWarnings,
         DrywallTakeoffResult drywall,
         StudTakeoffResult studs,
-        IReadOnlyList<IReadOnlyList<double>> studCentersByWall,
+        IReadOnlyList<WallStudPlan> studPlansByWall,
         InsulationTakeoffResult insulation,
         string outputPath)
     {
@@ -559,7 +572,7 @@ public static class Program
                 $"Wall {index + 1}",
                 length,
                 penetrationsByWall.TryGetValue(index, out var items) ? items : [],
-                BuildStudLayoutFromCenters(project.Settings, studCentersByWall[index])))
+                BuildStudLayoutFromPlan(project.Settings, studPlansByWall[index])))
             .ToArray();
 
         var summary = new SummaryDto(
@@ -602,8 +615,8 @@ public static class Program
             $"Net wall area formula: gross - penetrations = {grossAreaSqFt - penetrationAreaSqFt:0.###} sqft.",
             $"Stud spacing: {project.Settings.StudsSpacingInches:0.###} in on-center.",
             $"Stud type: {project.Settings.StudType}.",
-            $"Stud subtraction at penetrations: {(project.Settings.StudsSubtractPenetrations ? "enabled" : "disabled")}.",
-            "When enabled, king studs are added at opening sides using centerline +/- half stud width.",
+            "Studs inside framed opening zones are removed.",
+            "King studs are then added at opening sides using centerline +/- 1.5 stud widths.",
             $"Drywall sheet token: {project.Settings.DrywallSheet}.",
             $"Drywall waste factor: {project.Settings.DrywallWaste:0.###}.",
             $"Insulation coverage: {project.Settings.InsulationCoverageSquareFeet:0.###} sqft per unit.",
@@ -633,54 +646,87 @@ public static class Program
             penetration.HeightFeet);
     }
 
-    private static IReadOnlyList<IReadOnlyList<double>> BuildStudCentersByWall(Project project)
+    private static IReadOnlyList<WallStudPlan> BuildStudPlansByWall(Project project)
     {
-        var subtractPenetrations = project.Settings.StudsSubtractPenetrations;
-        var centersByWall = new List<IReadOnlyList<double>>(project.WallLengthsFeet.Length);
+        var plansByWall = new List<WallStudPlan>(project.WallLengthsFeet.Length);
 
         for (var wallIndex = 0; wallIndex < project.WallLengthsFeet.Length; wallIndex++)
         {
-            var centers = StudLayoutPlanner.GenerateStudCentersFeet(
-                project.WallLengthsFeet[wallIndex],
-                project.Settings.StudsSpacingInches);
+            var wallLength = project.WallLengthsFeet[wallIndex];
+            var wallHeight = project.WallHeightFeet;
+            var studWidthFeet = StudTypeDisplay.GetWidthFeet(ToStudTypeDto(project.Settings.StudType));
+            var openings = project.Penetrations
+                .Where(p => p.WallIndex == wallIndex)
+                .Select(p => new StudOpening(p.XFeet, p.YFeet, p.WidthFeet, p.HeightFeet))
+                .ToArray();
 
-            if (subtractPenetrations)
-            {
-                var spans = project.Penetrations
-                    .Where(p => p.WallIndex == wallIndex)
-                    .Select(p => new LinearSpan(p.XFeet, p.XFeet + p.WidthFeet))
-                    .ToArray();
+            var framedPlan = FramedStudPlanner.BuildWallPlan(
+                wallLength,
+                wallHeight,
+                project.Settings.StudsSpacingInches,
+                studWidthFeet,
+                openings);
 
-                centers = StudLayoutPlanner.RemoveCentersInsideSpans(centers, spans);
-                var studWidthFeet = StudTypeDisplay.GetWidthFeet(ToStudTypeDto(project.Settings.StudType));
-                centers = StudLayoutPlanner.AddKingStudCenters(
-                    centers,
-                    spans,
-                    studWidthFeet,
-                    project.WallLengthsFeet[wallIndex]);
-            }
-
-            centersByWall.Add(centers);
+            plansByWall.Add(new WallStudPlan(
+                framedPlan.NominalCenters,
+                framedPlan.CommonCenters,
+                framedPlan.KingCenters,
+                framedPlan.FinalCenters,
+                framedPlan.TrimmerCount,
+                framedPlan.CrippleTopCount,
+                framedPlan.CrippleBottomCount));
         }
 
-        return centersByWall;
+        return plansByWall;
     }
 
-    private static StudTakeoffResult BuildStudTakeoffResult(ProjectSettings settings, IReadOnlyList<IReadOnlyList<double>> studCentersByWall)
+    private static StudTakeoffResult BuildStudTakeoffResult(ProjectSettings settings, IReadOnlyList<WallStudPlan> studPlansByWall)
     {
         var spacing = Length.FromInches(settings.StudsSpacingInches);
-        var studsPerWall = studCentersByWall.Select(c => c.Count).ToArray();
+        var studsPerWall = studPlansByWall.Select(c => c.BaseStudCount).ToArray();
         var baseStuds = studsPerWall.Sum();
         var totalStuds = baseStuds <= 0
             ? 0
             : (int)Math.Ceiling(baseStuds * (1.0 + settings.StudsWaste));
 
-        return new StudTakeoffResult(spacing, settings.StudsWaste, baseStuds, totalStuds, studsPerWall);
+        var commonStuds = studPlansByWall.Sum(c => c.CommonCenters.Count);
+        var kingStuds = studPlansByWall.Sum(c => c.KingCenters.Count);
+        var trimmerStuds = studPlansByWall.Sum(c => c.TrimmerCount);
+        var crippleTopStuds = studPlansByWall.Sum(c => c.CrippleTopCount);
+        var crippleBottomStuds = studPlansByWall.Sum(c => c.CrippleBottomCount);
+
+        return new FramedStudTakeoffResult(
+            spacing,
+            settings.StudsWaste,
+            baseStuds,
+            totalStuds,
+            studsPerWall,
+            commonStuds,
+            kingStuds,
+            trimmerStuds,
+            crippleTopStuds,
+            crippleBottomStuds);
     }
 
-    private static StudLayoutDto BuildStudLayoutFromCenters(ProjectSettings settings, IReadOnlyList<double> studCentersFeet)
+    private static StudLayoutDto BuildStudLayoutFromPlan(ProjectSettings settings, WallStudPlan plan)
     {
-        return new StudLayoutDto(ToStudTypeDto(settings.StudType), settings.StudsSpacingInches, studCentersFeet);
+        return new StudLayoutDto(
+            ToStudTypeDto(settings.StudType),
+            settings.StudsSpacingInches,
+            plan.FinalCenters,
+            plan.NominalCenters);
+    }
+
+    private readonly record struct WallStudPlan(
+        IReadOnlyList<double> NominalCenters,
+        IReadOnlyList<double> CommonCenters,
+        IReadOnlyList<double> KingCenters,
+        IReadOnlyList<double> FinalCenters,
+        int TrimmerCount,
+        int CrippleTopCount,
+        int CrippleBottomCount)
+    {
+        public int BaseStudCount => FinalCenters.Count + TrimmerCount + CrippleTopCount + CrippleBottomCount;
     }
 
     private static StudTypeDto ToStudTypeDto(string studTypeToken)

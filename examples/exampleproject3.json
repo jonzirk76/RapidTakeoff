@@ -1,7 +1,7 @@
 {
-  "name": "Garage",
+  "name": "Single Wall",
   "wallHeightFeet": 10,
-  "wallLengthsFeet": [24, 24, 24, 24],
+  "wallLengthsFeet": [24],
   "penetrations": [
     {
       "id": "DR-01",
@@ -11,15 +11,6 @@
       "yFeet": 0,
       "widthFeet": 3,
       "heightFeet": 7
-    },
-    {
-      "id": "WIN-01",
-      "type": "window",
-      "wallIndex": 1,
-      "xFeet": 8.5,
-      "yFeet": 3,
-      "widthFeet": 4,
-      "heightFeet": 3
     }
   ],
   "settings": {

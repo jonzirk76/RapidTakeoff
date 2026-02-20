@@ -69,7 +69,8 @@ public static class StudLayoutPlanner
 
     /// <summary>
     /// Adds king-stud centerlines at both sides of each opening span.
-    /// Side centerlines are offset by half stud width from opening edges.
+    /// Side centerlines are offset by 1.5x stud width from opening edges
+    /// (trimmer at 0.5x, king attached outside trimmer by another stud width).
     /// </summary>
     /// <param name="studCentersFeet">Current stud centerline X positions in feet.</param>
     /// <param name="openingSpans">Opening spans in wall-local X coordinates.</param>
@@ -93,7 +94,7 @@ public static class StudLayoutPlanner
         if (openingSpans.Count == 0)
             return studCentersFeet.ToArray();
 
-        var halfStud = studWidthFeet / 2.0;
+        var kingOffset = studWidthFeet * 1.5;
         var allCenters = new List<double>(studCentersFeet);
 
         foreach (var rawSpan in openingSpans)
@@ -102,8 +103,8 @@ public static class StudLayoutPlanner
                 ? rawSpan
                 : new LinearSpan(rawSpan.EndFeet, rawSpan.StartFeet);
 
-            var leftKing = span.StartFeet - halfStud;
-            var rightKing = span.EndFeet + halfStud;
+            var leftKing = span.StartFeet - kingOffset;
+            var rightKing = span.EndFeet + kingOffset;
 
             if (leftKing >= 0.0 - Epsilon && leftKing <= wallLengthFeet + Epsilon)
                 allCenters.Add(Math.Clamp(leftKing, 0.0, wallLengthFeet));

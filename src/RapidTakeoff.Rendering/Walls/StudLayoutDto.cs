@@ -6,10 +6,12 @@ namespace RapidTakeoff.Rendering.Walls;
 /// <param name="StudType">Nominal stud type used to derive displayed stud width.</param>
 /// <param name="SpacingInches">Requested framing spacing in inches.</param>
 /// <param name="StudCenterXFeet">Stud centerline positions in wall-local X coordinates (feet).</param>
+/// <param name="NominalStudCenterXFeet">Initial nominal stud centerline positions before opening-based filtering/augmentation.</param>
 public sealed record StudLayoutDto(
     StudTypeDto StudType,
     double SpacingInches,
-    IReadOnlyList<double> StudCenterXFeet
+    IReadOnlyList<double> StudCenterXFeet,
+    IReadOnlyList<double>? NominalStudCenterXFeet = null
 );
 
 /// <summary>

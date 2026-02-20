@@ -31,11 +31,6 @@ public sealed class ProjectSettings
     public string StudType { get; set; } = "2x4";
 
     /// <summary>
-    /// Gets or sets whether studs whose centerlines fall within penetration spans should be removed.
-    /// </summary>
-    public bool StudsSubtractPenetrations { get; set; } = false;
-
-    /// <summary>
     /// Gets or sets the insulation waste factor as a fraction (e.g., 0.10 for 10%).
     /// </summary>
     public double InsulationWaste { get; set; } = 0.10;

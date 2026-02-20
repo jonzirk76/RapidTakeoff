@@ -48,16 +48,16 @@ public sealed class StudLayoutPlannerTests
     }
 
     [Fact]
-    public void AddKingStudCenters_AddsSideCentersAtHalfStudWidth()
+    public void AddKingStudCenters_AddsSideCentersAtOnePointFiveStudWidths()
     {
         var centers = new[] { 0.0, 6.0, 12.0 };
         var openings = new[] { new LinearSpan(4.0, 8.0) };
-        var studWidthFeet = 0.5; // 6 in width => +/- 0.25 ft
+        var studWidthFeet = 0.5; // 6 in width => king offset +/- 0.75 ft
 
         var withKings = StudLayoutPlanner.AddKingStudCenters(centers, openings, studWidthFeet, wallLengthFeet: 12.0);
 
-        Assert.Contains(withKings, x => Math.Abs(x - 3.75) < 1e-6);
-        Assert.Contains(withKings, x => Math.Abs(x - 8.25) < 1e-6);
+        Assert.Contains(withKings, x => Math.Abs(x - 3.25) < 1e-6);
+        Assert.Contains(withKings, x => Math.Abs(x - 8.75) < 1e-6);
     }
 
     [Fact]
@@ -76,5 +76,21 @@ public sealed class StudLayoutPlannerTests
         Assert.Equal(withKings.OrderBy(x => x).ToArray(), withKings);
         Assert.Single(withKings.Where(x => Math.Abs(x - 0.0) < 1e-6));
         Assert.Single(withKings.Where(x => Math.Abs(x - 12.0) < 1e-6));
+    }
+
+    [Fact]
+    public void RemoveFramedOpeningZone_ThenAddKings_LeavesOnlyKingsNearOpening()
+    {
+        var generated = StudLayoutPlanner.GenerateStudCentersFeet(12.0, 16.0);
+        var studWidth = 0.5;
+        var opening = new LinearSpan(4.0, 8.0);
+        var framedZone = new LinearSpan(4.0 - (1.5 * studWidth), 8.0 + (1.5 * studWidth));
+
+        var trimmed = StudLayoutPlanner.RemoveCentersInsideSpans(generated, new[] { framedZone });
+        var final = StudLayoutPlanner.AddKingStudCenters(trimmed, new[] { opening }, studWidth, 12.0);
+
+        Assert.Contains(final, x => Math.Abs(x - 3.25) < 1e-6);
+        Assert.Contains(final, x => Math.Abs(x - 8.75) < 1e-6);
+        Assert.DoesNotContain(final, x => x > 3.25 + 1e-6 && x < 8.75 - 1e-6);
     }
 }

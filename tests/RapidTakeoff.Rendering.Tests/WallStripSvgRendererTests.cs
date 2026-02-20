@@ -71,7 +71,11 @@ public class WallStripSvgRendererTests
                     new[]
                     {
                         new PenetrationDto("WIN-01", "window", 3, 3, 4, 3)
-                    })
+                    },
+                    new StudLayoutDto(
+                        StudTypeDto.TwoBySix,
+                        16,
+                        new[] { 0.0, 1.3333333333, 2.6666666667, 4.0, 5.3333333333, 6.6666666667, 8.0, 9.3333333333, 10.6666666667, 12.0 }))
             },
             Summary: new SummaryDto(
                 TotalLengthFeet: 12,
@@ -87,7 +91,13 @@ public class WallStripSvgRendererTests
 
         Assert.Contains(@"class=""penetration""", svg);
         Assert.Contains("WIN-01", svg);
-        Assert.DoesNotContain("stroke-dasharray", svg);
+        Assert.DoesNotMatch(@"class=""penetration""[^>]*stroke-dasharray=", svg);
+        Assert.Contains(@"class=""trimmer""", svg);
+        Assert.Contains(@"class=""king""", svg);
+        Assert.Contains(@"class=""header""", svg);
+        Assert.Contains(@"class=""sill""", svg);
+        Assert.Contains(@"class=""cripple-top""", svg);
+        Assert.Contains(@"class=""cripple-bottom""", svg);
     }
 
     /// <summary>

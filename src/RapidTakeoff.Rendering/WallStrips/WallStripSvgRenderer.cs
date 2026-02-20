@@ -86,22 +86,118 @@ public sealed class WallStripSvgRenderer
             sb.AppendLine(
                 $@"  <rect x=""{xCursor}"" y=""{yCursor}"" width=""{rectWidth:F2}"" height=""{stripHeight}"" fill=""{wallFillColor}"" stroke=""#1f2937"" stroke-width=""1"" />");
 
-            // Rough stud layout: dotted centerlines inside the wall, with width mapped from stud type.
+            var studType = wall.StudLayout?.StudType ?? StudTypeDto.TwoByFour;
+            var studWidthFeet = StudTypeDisplay.GetWidthFeet(studType);
+            var studWidthPx = Math.Clamp(studWidthFeet * pixelsPerFoot * 0.35, 0.8, 1.4);
+            var framingWidthPx = Math.Clamp(studWidthPx * 2.0, 1.6, 2.8);
+            var baseStudCenters = wall.StudLayout?.NominalStudCenterXFeet is { Count: > 0 } nominalCenters
+                ? nominalCenters
+                : wall.StudLayout is null
+                ? Array.Empty<double>()
+                : GenerateNominalStudCentersFeet(wall.LengthFeet, wall.StudLayout.SpacingInches);
+            const double epsilon = 1e-9;
+
+            double ToSvgX(double xFeet) => xCursor + (xFeet * pixelsPerFoot);
+            double ToSvgY(double yFeet) => yCursor + stripHeight - (yFeet * pixelsPerFoot);
+
+            void DrawVerticalMember(string cssClass, double centerXFeet, double fromYFeet, double toYFeet, string stroke, double strokeWidthPx)
+            {
+                var xFeet = Math.Clamp(centerXFeet, 0.0, wall.LengthFeet);
+                var y0 = Math.Clamp(Math.Min(fromYFeet, toYFeet), 0.0, dto.HeightFeet);
+                var y1 = Math.Clamp(Math.Max(fromYFeet, toYFeet), 0.0, dto.HeightFeet);
+                if (y1 - y0 <= epsilon)
+                    return;
+
+                var x = ToSvgX(xFeet);
+                sb.AppendLine(
+                    $@"  <line class=""{cssClass}"" x1=""{x:F2}"" y1=""{ToSvgY(y0):F2}"" x2=""{x:F2}"" y2=""{ToSvgY(y1):F2}"" stroke=""{stroke}"" stroke-width=""{strokeWidthPx:F2}"" stroke-dasharray=""1.5 5.5"" stroke-linecap=""round"" opacity=""0.85"" />");
+            }
+
+            void DrawHorizontalMember(string cssClass, double yFeet, double leftXFeet, double rightXFeet, string stroke, double strokeWidthPx)
+            {
+                var y = Math.Clamp(yFeet, 0.0, dto.HeightFeet);
+                var x0 = Math.Clamp(Math.Min(leftXFeet, rightXFeet), 0.0, wall.LengthFeet);
+                var x1 = Math.Clamp(Math.Max(leftXFeet, rightXFeet), 0.0, wall.LengthFeet);
+                if (x1 - x0 <= epsilon)
+                    return;
+
+                sb.AppendLine(
+                    $@"  <line class=""{cssClass}"" x1=""{ToSvgX(x0):F2}"" y1=""{ToSvgY(y):F2}"" x2=""{ToSvgX(x1):F2}"" y2=""{ToSvgY(y):F2}"" stroke=""{stroke}"" stroke-width=""{strokeWidthPx:F2}"" stroke-dasharray=""1.5 5.5"" stroke-linecap=""round"" opacity=""0.85"" />");
+            }
+
+            // Rough stud layout: dotted centerlines inside the wall.
             if (wall.StudLayout is not null && wall.StudLayout.StudCenterXFeet is not null)
             {
-                var studWidthPx = Math.Clamp(
-                    StudTypeDisplay.GetWidthFeet(wall.StudLayout.StudType) * pixelsPerFoot * 0.35,
-                    0.8,
-                    1.4);
-
                 foreach (var centerXFeet in wall.StudLayout.StudCenterXFeet)
                 {
                     if (centerXFeet < 0 || centerXFeet > wall.LengthFeet)
                         continue;
 
-                    var studX = xCursor + (centerXFeet * pixelsPerFoot);
+                    var studX = ToSvgX(centerXFeet);
                     sb.AppendLine(
                         $@"  <line class=""stud"" x1=""{studX:F2}"" y1=""{yCursor}"" x2=""{studX:F2}"" y2=""{rectBottom}"" stroke=""#334155"" stroke-width=""{studWidthPx:F2}"" stroke-dasharray=""1.5 5.5"" stroke-linecap=""round"" opacity=""0.65"" />");
+                }
+            }
+
+            // Opening framing: trimmers, kings, header/sill, and cripples.
+            foreach (var penetration in wall.Penetrations ?? [])
+            {
+                if (wall.StudLayout is null || penetration.WidthFeet <= 0 || penetration.HeightFeet <= 0)
+                    continue;
+
+                var openingLeft = penetration.XFeet;
+                var openingRight = penetration.XFeet + penetration.WidthFeet;
+                var openingBottom = penetration.YFeet;
+                var openingTop = penetration.YFeet + penetration.HeightFeet;
+                if (openingRight <= openingLeft || openingTop <= openingBottom)
+                    continue;
+
+                var halfStud = studWidthFeet / 2.0;
+                var kingOffset = studWidthFeet * 1.5;
+
+                var leftTrimmer = openingLeft - halfStud;
+                var rightTrimmer = openingRight + halfStud;
+                var leftKing = openingLeft - kingOffset;
+                var rightKing = openingRight + kingOffset;
+
+                // Trimmers: floor to top of opening.
+                DrawVerticalMember("trimmer", leftTrimmer, 0.0, openingTop, "#0f172a", framingWidthPx);
+                DrawVerticalMember("trimmer", rightTrimmer, 0.0, openingTop, "#0f172a", framingWidthPx);
+
+                // Kings: full wall height.
+                DrawVerticalMember("king", leftKing, 0.0, dto.HeightFeet, "#111827", framingWidthPx);
+                DrawVerticalMember("king", rightKing, 0.0, dto.HeightFeet, "#111827", framingWidthPx);
+
+                // Header above opening, centered half stud above opening top.
+                var headerY = openingTop + halfStud;
+                if (headerY <= dto.HeightFeet + epsilon)
+                {
+                    DrawHorizontalMember("header", headerY, leftTrimmer, rightTrimmer, "#111827", framingWidthPx);
+                }
+
+                // Sill below opening when opening doesn't start at floor.
+                var hasSill = openingBottom > epsilon;
+                var sillY = openingBottom - halfStud;
+                if (hasSill && sillY >= -epsilon)
+                {
+                    DrawHorizontalMember("sill", sillY, leftTrimmer, rightTrimmer, "#1f2937", framingWidthPx);
+                }
+
+                // Cripples inside opening span at nominal spacing.
+                foreach (var center in baseStudCenters)
+                {
+                    if (center <= openingLeft + epsilon || center >= openingRight - epsilon)
+                        continue;
+
+                    if (headerY < dto.HeightFeet - epsilon)
+                    {
+                        DrawVerticalMember("cripple-top", center, headerY, dto.HeightFeet, "#475569", studWidthPx);
+                    }
+
+                    if (hasSill && sillY > epsilon)
+                    {
+                        DrawVerticalMember("cripple-bottom", center, 0.0, sillY, "#475569", studWidthPx);
+                    }
                 }
             }
 
@@ -199,6 +295,25 @@ public sealed class WallStripSvgRenderer
 
         sb.AppendLine("</svg>");
         return sb.ToString();
+    }
+
+    private static double[] GenerateNominalStudCentersFeet(double wallLengthFeet, double spacingInches)
+    {
+        if (wallLengthFeet <= 0 || spacingInches <= 0)
+            return [];
+
+        var spacingFeet = spacingInches / 12.0;
+        var centers = new List<double> { 0.0 };
+
+        var x = spacingFeet;
+        while (x < wallLengthFeet - 1e-9)
+        {
+            centers.Add(x);
+            x += spacingFeet;
+        }
+
+        centers.Add(wallLengthFeet);
+        return centers.ToArray();
     }
 
     /// <summary>
