@@ -122,7 +122,7 @@ public static class Program
         Console.WriteLine("  --project <path>             Path to project JSON file (required)");
         Console.WriteLine("  --format <text|csv|svg>      Output format (default: text)");
         Console.WriteLine("  --out <path>                 Required when --format svg (output .svg path)");
-        Console.WriteLine("                               SVG writes a wall-strip diagram to the --out file");
+        Console.WriteLine("                               SVG writes a wall elevations diagram to the --out file");
         Console.WriteLine();
     }
 

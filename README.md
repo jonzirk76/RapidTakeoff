@@ -2,6 +2,12 @@
 
 Lightweight residential construction takeoff engine written in C#.
 
+## What's New in v0.4.0
+- Penetrations now drive net-area math and framed stud takeoff behavior.
+- Elevations include opening framing visualization (kings, trimmers, headers, sills, cripples).
+- Stud counts include framing categories, not just baseline spacing studs.
+- Assumptions and framing behavior are documented in estimate output.
+
 This repository focuses on:
 - Provable, unit-tested takeoff math
 - Clear unit and measurement handling
