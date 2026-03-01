@@ -1,11 +1,13 @@
+using RapidTakeoff.Core.Units;
+
 namespace RapidTakeoff.Core.Takeoff.Studs;
 
 /// <summary>
-/// Represents a linear span along wall length in feet.
+/// Represents a linear span along wall length.
 /// </summary>
-/// <param name="StartFeet">Span start in feet.</param>
-/// <param name="EndFeet">Span end in feet.</param>
-public readonly record struct LinearSpan(double StartFeet, double EndFeet);
+/// <param name="Start">Span start.</param>
+/// <param name="End">Span end.</param>
+public readonly record struct LinearSpan(Length Start, Length End);
 
 /// <summary>
 /// Generates and filters rough stud centerline layouts.
@@ -15,30 +17,31 @@ public static class StudLayoutPlanner
     private const double Epsilon = 1e-9;
 
     /// <summary>
-    /// Generates stud centerline X positions in feet for a wall.
+    /// Generates stud centerline X positions for a wall.
     /// Includes both end studs.
     /// </summary>
-    /// <param name="wallLengthFeet">Wall length in feet (&gt; 0).</param>
-    /// <param name="spacingInches">Stud spacing in inches (&gt; 0).</param>
-    public static IReadOnlyList<double> GenerateStudCentersFeet(double wallLengthFeet, double spacingInches)
+    /// <param name="wallLength">Wall length (&gt; 0).</param>
+    /// <param name="spacing">Stud spacing (&gt; 0).</param>
+    public static IReadOnlyList<Length> GenerateStudCenters(Length wallLength, Length spacing)
     {
-        if (double.IsNaN(wallLengthFeet) || double.IsInfinity(wallLengthFeet) || wallLengthFeet <= 0)
-            throw new ArgumentOutOfRangeException(nameof(wallLengthFeet), "Wall length must be a finite number greater than zero.");
+        if (wallLength.TotalInches <= 0)
+            throw new ArgumentOutOfRangeException(nameof(wallLength), "Wall length must be greater than zero.");
 
-        if (double.IsNaN(spacingInches) || double.IsInfinity(spacingInches) || spacingInches <= 0)
-            throw new ArgumentOutOfRangeException(nameof(spacingInches), "Spacing must be a finite number greater than zero.");
+        if (spacing.TotalInches <= 0)
+            throw new ArgumentOutOfRangeException(nameof(spacing), "Spacing must be greater than zero.");
 
-        var spacingFeet = spacingInches / 12.0;
-        var centers = new List<double> { 0.0 };
+        var centers = new List<Length> { Length.FromInches(0.0) };
+        var wallLengthInches = wallLength.TotalInches;
+        var spacingInches = spacing.TotalInches;
 
-        var x = spacingFeet;
-        while (x < wallLengthFeet - Epsilon)
+        var x = spacingInches;
+        while (x < wallLengthInches - Epsilon)
         {
-            centers.Add(x);
-            x += spacingFeet;
+            centers.Add(Length.FromInches(x));
+            x += spacingInches;
         }
 
-        centers.Add(wallLengthFeet);
+        centers.Add(wallLength);
         return centers;
     }
 
@@ -46,24 +49,24 @@ public static class StudLayoutPlanner
     /// Removes stud centerlines that fall within any supplied span.
     /// Span boundaries are treated as inclusive.
     /// </summary>
-    /// <param name="studCentersFeet">Stud centerline X positions in feet.</param>
+    /// <param name="studCenters">Stud centerline X positions.</param>
     /// <param name="removalSpans">Spans where studs should be removed.</param>
-    public static IReadOnlyList<double> RemoveCentersInsideSpans(
-        IReadOnlyList<double> studCentersFeet,
+    public static IReadOnlyList<Length> RemoveCentersInsideSpans(
+        IReadOnlyList<Length> studCenters,
         IReadOnlyList<LinearSpan> removalSpans)
     {
-        ArgumentNullException.ThrowIfNull(studCentersFeet);
+        ArgumentNullException.ThrowIfNull(studCenters);
         ArgumentNullException.ThrowIfNull(removalSpans);
 
         if (removalSpans.Count == 0)
-            return studCentersFeet.ToArray();
+            return studCenters.ToArray();
 
         var normalizedSpans = removalSpans
-            .Select(span => span.StartFeet <= span.EndFeet ? span : new LinearSpan(span.EndFeet, span.StartFeet))
+            .Select(span => span.Start.TotalInches <= span.End.TotalInches ? span : new LinearSpan(span.End, span.Start))
             .ToArray();
 
-        return studCentersFeet
-            .Where(center => !normalizedSpans.Any(span => center >= span.StartFeet - Epsilon && center <= span.EndFeet + Epsilon))
+        return studCenters
+            .Where(center => !normalizedSpans.Any(span => center.TotalInches >= span.Start.TotalInches - Epsilon && center.TotalInches <= span.End.TotalInches + Epsilon))
             .ToArray();
     }
 
@@ -72,54 +75,55 @@ public static class StudLayoutPlanner
     /// Side centerlines are offset by 1.5x stud width from opening edges
     /// (trimmer at 0.5x, king attached outside trimmer by another stud width).
     /// </summary>
-    /// <param name="studCentersFeet">Current stud centerline X positions in feet.</param>
+    /// <param name="studCenters">Current stud centerline X positions.</param>
     /// <param name="openingSpans">Opening spans in wall-local X coordinates.</param>
-    /// <param name="studWidthFeet">Stud width in feet (&gt; 0).</param>
-    /// <param name="wallLengthFeet">Wall length in feet (&gt; 0).</param>
-    public static IReadOnlyList<double> AddKingStudCenters(
-        IReadOnlyList<double> studCentersFeet,
+    /// <param name="studWidth">Stud width (&gt; 0).</param>
+    /// <param name="wallLength">Wall length (&gt; 0).</param>
+    public static IReadOnlyList<Length> AddKingStudCenters(
+        IReadOnlyList<Length> studCenters,
         IReadOnlyList<LinearSpan> openingSpans,
-        double studWidthFeet,
-        double wallLengthFeet)
+        Length studWidth,
+        Length wallLength)
     {
-        ArgumentNullException.ThrowIfNull(studCentersFeet);
+        ArgumentNullException.ThrowIfNull(studCenters);
         ArgumentNullException.ThrowIfNull(openingSpans);
 
-        if (double.IsNaN(studWidthFeet) || double.IsInfinity(studWidthFeet) || studWidthFeet <= 0)
-            throw new ArgumentOutOfRangeException(nameof(studWidthFeet), "Stud width must be a finite number greater than zero.");
+        if (studWidth.TotalInches <= 0)
+            throw new ArgumentOutOfRangeException(nameof(studWidth), "Stud width must be greater than zero.");
 
-        if (double.IsNaN(wallLengthFeet) || double.IsInfinity(wallLengthFeet) || wallLengthFeet <= 0)
-            throw new ArgumentOutOfRangeException(nameof(wallLengthFeet), "Wall length must be a finite number greater than zero.");
+        if (wallLength.TotalInches <= 0)
+            throw new ArgumentOutOfRangeException(nameof(wallLength), "Wall length must be greater than zero.");
 
         if (openingSpans.Count == 0)
-            return studCentersFeet.ToArray();
+            return studCenters.ToArray();
 
-        var kingOffset = studWidthFeet * 1.5;
-        var allCenters = new List<double>(studCentersFeet);
+        var kingOffsetInches = studWidth.TotalInches * 1.5;
+        var wallLengthInches = wallLength.TotalInches;
+        var allCenters = new List<Length>(studCenters);
 
         foreach (var rawSpan in openingSpans)
         {
-            var span = rawSpan.StartFeet <= rawSpan.EndFeet
+            var span = rawSpan.Start.TotalInches <= rawSpan.End.TotalInches
                 ? rawSpan
-                : new LinearSpan(rawSpan.EndFeet, rawSpan.StartFeet);
+                : new LinearSpan(rawSpan.End, rawSpan.Start);
 
-            var leftKing = span.StartFeet - kingOffset;
-            var rightKing = span.EndFeet + kingOffset;
+            var leftKingInches = span.Start.TotalInches - kingOffsetInches;
+            var rightKingInches = span.End.TotalInches + kingOffsetInches;
 
-            if (leftKing >= 0.0 - Epsilon && leftKing <= wallLengthFeet + Epsilon)
-                allCenters.Add(Math.Clamp(leftKing, 0.0, wallLengthFeet));
+            if (leftKingInches >= 0.0 - Epsilon && leftKingInches <= wallLengthInches + Epsilon)
+                allCenters.Add(Length.FromInches(Math.Clamp(leftKingInches, 0.0, wallLengthInches)));
 
-            if (rightKing >= 0.0 - Epsilon && rightKing <= wallLengthFeet + Epsilon)
-                allCenters.Add(Math.Clamp(rightKing, 0.0, wallLengthFeet));
+            if (rightKingInches >= 0.0 - Epsilon && rightKingInches <= wallLengthInches + Epsilon)
+                allCenters.Add(Length.FromInches(Math.Clamp(rightKingInches, 0.0, wallLengthInches)));
         }
 
         return allCenters
-            .OrderBy(x => x)
+            .OrderBy(x => x.TotalInches)
             .Aggregate(
-                seed: new List<double>(),
+                seed: new List<Length>(),
                 (acc, x) =>
                 {
-                    if (acc.Count == 0 || Math.Abs(acc[^1] - x) > Epsilon)
+                    if (acc.Count == 0 || Math.Abs(acc[^1].TotalInches - x.TotalInches) > Epsilon)
                         acc.Add(x);
                     return acc;
                 });

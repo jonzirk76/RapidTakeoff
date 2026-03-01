@@ -1,18 +1,20 @@
+using RapidTakeoff.Core.Units;
+
 namespace RapidTakeoff.Core.Takeoff.Studs;
 
 /// <summary>
 /// Opening geometry used by framed stud planning.
 /// Coordinates are in wall-local feet.
 /// </summary>
-/// <param name="XFeet">Opening left edge from wall start.</param>
-/// <param name="YFeet">Opening bottom from floor.</param>
-/// <param name="WidthFeet">Opening width in feet.</param>
-/// <param name="HeightFeet">Opening height in feet.</param>
+/// <param name="X">Opening left edge from wall start.</param>
+/// <param name="Y">Opening bottom from floor.</param>
+/// <param name="Width">Opening width.</param>
+/// <param name="Height">Opening height.</param>
 public readonly record struct StudOpening(
-    double XFeet,
-    double YFeet,
-    double WidthFeet,
-    double HeightFeet);
+    Length X,
+    Length Y,
+    Length Width,
+    Length Height);
 
 /// <summary>
 /// Framed stud plan for a single wall.
@@ -22,22 +24,22 @@ public sealed class FramedWallStudPlan
     /// <summary>
     /// Gets nominal stud centers from the initial spacing pass.
     /// </summary>
-    public IReadOnlyList<double> NominalCenters { get; }
+    public IReadOnlyList<Length> NominalCenters { get; }
 
     /// <summary>
     /// Gets common stud centers after opening-zone removal.
     /// </summary>
-    public IReadOnlyList<double> CommonCenters { get; }
+    public IReadOnlyList<Length> CommonCenters { get; }
 
     /// <summary>
     /// Gets king stud centers.
     /// </summary>
-    public IReadOnlyList<double> KingCenters { get; }
+    public IReadOnlyList<Length> KingCenters { get; }
 
     /// <summary>
     /// Gets final rendered/quantified stud centers (common + kings, deduplicated).
     /// </summary>
-    public IReadOnlyList<double> FinalCenters { get; }
+    public IReadOnlyList<Length> FinalCenters { get; }
 
     /// <summary>
     /// Gets trimmer stud count.
@@ -63,10 +65,10 @@ public sealed class FramedWallStudPlan
     /// Initializes a new framed wall stud plan.
     /// </summary>
     public FramedWallStudPlan(
-        IReadOnlyList<double> nominalCenters,
-        IReadOnlyList<double> commonCenters,
-        IReadOnlyList<double> kingCenters,
-        IReadOnlyList<double> finalCenters,
+        IReadOnlyList<Length> nominalCenters,
+        IReadOnlyList<Length> commonCenters,
+        IReadOnlyList<Length> kingCenters,
+        IReadOnlyList<Length> finalCenters,
         int trimmerCount,
         int crippleTopCount,
         int crippleBottomCount)
@@ -92,13 +94,17 @@ public static class FramedStudPlanner
     /// Builds a framed stud plan for one wall.
     /// </summary>
     public static FramedWallStudPlan BuildWallPlan(
-        double wallLengthFeet,
-        double wallHeightFeet,
-        double spacingInches,
-        double studWidthFeet,
+        Length wallLength,
+        Length wallHeight,
+        Length spacing,
+        Length studWidth,
         IReadOnlyList<StudOpening> openings)
     {
-        var nominalCenters = StudLayoutPlanner.GenerateStudCentersFeet(wallLengthFeet, spacingInches);
+        var wallLengthInches = wallLength.TotalInches;
+        var wallHeightInches = wallHeight.TotalInches;
+        var studWidthInches = studWidth.TotalInches;
+
+        var nominalCenters = StudLayoutPlanner.GenerateStudCenters(wallLength, spacing);
         if (openings.Count == 0)
         {
             return new FramedWallStudPlan(
@@ -111,23 +117,25 @@ public static class FramedStudPlanner
                 crippleBottomCount: 0);
         }
 
-        var halfStud = studWidthFeet / 2.0;
-        var framingOffsetFeet = studWidthFeet * 1.5;
+        var halfStudInches = studWidthInches / 2.0;
+        var framingOffsetInches = studWidthInches * 1.5;
 
         var openingSpans = openings
-            .Select(p => new LinearSpan(p.XFeet, p.XFeet + p.WidthFeet))
+            .Select(p => new LinearSpan(p.X, p.X + p.Width))
             .ToArray();
 
         var framedOpeningSpans = openings
-            .Select(p => new LinearSpan(p.XFeet - framingOffsetFeet, p.XFeet + p.WidthFeet + framingOffsetFeet))
+            .Select(p => new LinearSpan(
+                Length.FromInches(Math.Max(0.0, p.X.TotalInches - framingOffsetInches)),
+                Length.FromInches(Math.Min(wallLengthInches, p.X.TotalInches + p.Width.TotalInches + framingOffsetInches))))
             .ToArray();
 
         var commonCenters = StudLayoutPlanner.RemoveCentersInsideSpans(nominalCenters, framedOpeningSpans);
         var kingCenters = StudLayoutPlanner.AddKingStudCenters(
-            Array.Empty<double>(),
+            Array.Empty<Length>(),
             openingSpans,
-            studWidthFeet,
-            wallLengthFeet);
+            studWidth,
+            wallLength);
 
         var trimmerCount = 0;
         var crippleTopCount = 0;
@@ -135,24 +143,24 @@ public static class FramedStudPlanner
 
         foreach (var opening in openings)
         {
-            var openingLeft = opening.XFeet;
-            var openingRight = opening.XFeet + opening.WidthFeet;
-            var openingBottom = opening.YFeet;
-            var openingTop = opening.YFeet + opening.HeightFeet;
+            var openingLeft = opening.X.TotalInches;
+            var openingRight = opening.X.TotalInches + opening.Width.TotalInches;
+            var openingBottom = opening.Y.TotalInches;
+            var openingTop = opening.Y.TotalInches + opening.Height.TotalInches;
 
-            var leftTrimmer = openingLeft - halfStud;
-            var rightTrimmer = openingRight + halfStud;
-            if (leftTrimmer >= -Epsilon && leftTrimmer <= wallLengthFeet + Epsilon) trimmerCount++;
-            if (rightTrimmer >= -Epsilon && rightTrimmer <= wallLengthFeet + Epsilon) trimmerCount++;
+            var leftTrimmer = openingLeft - halfStudInches;
+            var rightTrimmer = openingRight + halfStudInches;
+            if (leftTrimmer >= -Epsilon && leftTrimmer <= wallLengthInches + Epsilon) trimmerCount++;
+            if (rightTrimmer >= -Epsilon && rightTrimmer <= wallLengthInches + Epsilon) trimmerCount++;
 
-            var interiorCount = nominalCenters.Count(center => center > openingLeft + Epsilon && center < openingRight - Epsilon);
+            var interiorCount = nominalCenters.Count(center => center.TotalInches > openingLeft + Epsilon && center.TotalInches < openingRight - Epsilon);
 
-            var headerY = openingTop + halfStud;
-            if (headerY < wallHeightFeet - Epsilon)
+            var headerY = openingTop + halfStudInches;
+            if (headerY < wallHeightInches - Epsilon)
                 crippleTopCount += interiorCount;
 
             var hasSill = openingBottom > Epsilon;
-            var sillY = openingBottom - halfStud;
+            var sillY = openingBottom - halfStudInches;
             if (hasSill && sillY > Epsilon)
                 crippleBottomCount += interiorCount;
         }
@@ -168,15 +176,15 @@ public static class FramedStudPlanner
             crippleBottomCount);
     }
 
-    private static IReadOnlyList<double> MergeDistinctCenters(IReadOnlyList<double> a, IReadOnlyList<double> b)
+    private static IReadOnlyList<Length> MergeDistinctCenters(IReadOnlyList<Length> a, IReadOnlyList<Length> b)
     {
         return a.Concat(b)
-            .OrderBy(x => x)
+            .OrderBy(x => x.TotalInches)
             .Aggregate(
-                seed: new List<double>(),
+                seed: new List<Length>(),
                 (acc, x) =>
                 {
-                    if (acc.Count == 0 || Math.Abs(acc[^1] - x) > Epsilon)
+                    if (acc.Count == 0 || Math.Abs(acc[^1].TotalInches - x.TotalInches) > Epsilon)
                         acc.Add(x);
                     return acc;
                 });

@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Runtime.InteropServices;
+using RapidTakeoff.Core.Domain;
 using RapidTakeoff.Core.Projects;
 using RapidTakeoff.Core.Takeoff.Drywall;
 using RapidTakeoff.Core.Takeoff.Insulation;
@@ -409,15 +410,15 @@ public static class Program
             throw new FileNotFoundException("Project file was not found.", projectPath);
 
         var json = File.ReadAllText(projectPath);
-        var project = JsonSerializer.Deserialize<Project>(json, new JsonSerializerOptions
+        var rawProject = JsonSerializer.Deserialize<Project>(json, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         });
 
-        if (project is null)
+        if (rawProject is null)
             throw new InvalidOperationException("Project file could not be parsed.");
 
-        project.Validate();
+        var project = ProjectNormalizer.Normalize(rawProject);
         var validationWarnings = project.GetValidationWarnings();
 
         var grossAreaSqFt = project.GetGrossWallAreaSquareFeet();
@@ -449,7 +450,7 @@ public static class Program
     }
 
     private static int PrintEstimateText(
-        Project project,
+        TakeoffProject project,
         Area netArea,
         double grossAreaSqFt,
         double penetrationAreaSqFt,
@@ -462,8 +463,8 @@ public static class Program
         Console.WriteLine($"RapidTakeoff - Estimate: {project.Name}");
         Console.WriteLine("========================================");
         Console.WriteLine("Inputs");
-        Console.WriteLine($"  Wall height (ft): {project.WallHeightFeet:0.###}");
-        Console.WriteLine($"  Wall lengths (ft): {string.Join(", ", project.WallLengthsFeet.Select(x => x.ToString("0.###")))}");
+        Console.WriteLine($"  Wall height (ft): {project.WallHeight.TotalFeet:0.###}");
+        Console.WriteLine($"  Wall lengths (ft): {string.Join(", ", project.WallLengths.Select(x => x.TotalFeet.ToString("0.###")))}");
         Console.WriteLine($"  Drywall sheet: {project.Settings.DrywallSheet}");
         Console.WriteLine($"  Drywall waste: {project.Settings.DrywallWaste:0.###}");
         Console.WriteLine($"  Stud spacing (in): {project.Settings.StudsSpacingInches:0.###}");
@@ -512,7 +513,7 @@ public static class Program
     }
 
     private static int PrintEstimateCsv(
-        Project project,
+        TakeoffProject project,
         Area netArea,
         double grossAreaSqFt,
         double penetrationAreaSqFt,
@@ -549,7 +550,7 @@ public static class Program
     }
 
     private static int PrintEstimateSvg(
-        Project project,
+        TakeoffProject project,
         Area netArea,
         double grossAreaSqFt,
         double penetrationAreaSqFt,
@@ -567,16 +568,16 @@ public static class Program
                 g => g.Key,
                 g => (IReadOnlyList<PenetrationDto>)g.Select(ToRenderingPenetration).ToArray());
 
-        var walls = project.WallLengthsFeet
+        var walls = project.WallLengths
             .Select((length, index) => new WallSegmentDto(
                 $"Wall {index + 1}",
-                length,
+                length.TotalFeet,
                 penetrationsByWall.TryGetValue(index, out var items) ? items : [],
                 BuildStudLayoutFromPlan(project.Settings, studPlansByWall[index])))
             .ToArray();
 
         var summary = new SummaryDto(
-            project.WallLengthsFeet.Sum(),
+            project.WallLengths.Sum(length => length.TotalFeet),
             netArea.TotalSquareFeet,
             drywall.SheetCount,
             studs.TotalStuds,
@@ -585,7 +586,7 @@ public static class Program
 
         var dto = new WallStripDto(
             projectName,
-            project.WallHeightFeet,
+            project.WallHeight.TotalFeet,
             walls,
             summary,
             assumptions);
@@ -606,7 +607,7 @@ public static class Program
         return 0;
     }
 
-    private static IReadOnlyList<string> BuildAssumptions(Project project, double grossAreaSqFt, double penetrationAreaSqFt)
+    private static IReadOnlyList<string> BuildAssumptions(TakeoffProject project, double grossAreaSqFt, double penetrationAreaSqFt)
     {
         return
         [
@@ -631,7 +632,7 @@ public static class Program
             Console.WriteLine($"  {assumption}");
     }
 
-    private static PenetrationDto ToRenderingPenetration(ProjectPenetration penetration)
+    private static PenetrationDto ToRenderingPenetration(TakeoffPenetration penetration)
     {
         var id = string.IsNullOrWhiteSpace(penetration.Id)
             ? $"OPEN-{penetration.WallIndex + 1:00}"
@@ -640,31 +641,32 @@ public static class Program
         return new PenetrationDto(
             id,
             type,
-            penetration.XFeet,
-            penetration.YFeet,
-            penetration.WidthFeet,
-            penetration.HeightFeet);
+            penetration.X.TotalFeet,
+            penetration.Y.TotalFeet,
+            penetration.Width.TotalFeet,
+            penetration.Height.TotalFeet);
     }
 
-    private static IReadOnlyList<WallStudPlan> BuildStudPlansByWall(Project project)
+    private static IReadOnlyList<WallStudPlan> BuildStudPlansByWall(TakeoffProject project)
     {
-        var plansByWall = new List<WallStudPlan>(project.WallLengthsFeet.Length);
+        var plansByWall = new List<WallStudPlan>(project.WallLengths.Count);
+        var spacing = Length.FromInches(project.Settings.StudsSpacingInches);
 
-        for (var wallIndex = 0; wallIndex < project.WallLengthsFeet.Length; wallIndex++)
+        for (var wallIndex = 0; wallIndex < project.WallLengths.Count; wallIndex++)
         {
-            var wallLength = project.WallLengthsFeet[wallIndex];
-            var wallHeight = project.WallHeightFeet;
-            var studWidthFeet = StudTypeDisplay.GetWidthFeet(ToStudTypeDto(project.Settings.StudType));
+            var wallLength = project.WallLengths[wallIndex];
+            var wallHeight = project.WallHeight;
+            var studWidth = Length.FromFeet(StudTypeDisplay.GetWidthFeet(ToStudTypeDto(project.Settings.StudType)));
             var openings = project.Penetrations
                 .Where(p => p.WallIndex == wallIndex)
-                .Select(p => new StudOpening(p.XFeet, p.YFeet, p.WidthFeet, p.HeightFeet))
+                .Select(p => new StudOpening(p.X, p.Y, p.Width, p.Height))
                 .ToArray();
 
             var framedPlan = FramedStudPlanner.BuildWallPlan(
                 wallLength,
                 wallHeight,
-                project.Settings.StudsSpacingInches,
-                studWidthFeet,
+                spacing,
+                studWidth,
                 openings);
 
             plansByWall.Add(new WallStudPlan(
@@ -713,15 +715,15 @@ public static class Program
         return new StudLayoutDto(
             ToStudTypeDto(settings.StudType),
             settings.StudsSpacingInches,
-            plan.FinalCenters,
-            plan.NominalCenters);
+            plan.FinalCenters.Select(center => center.TotalFeet).ToArray(),
+            plan.NominalCenters.Select(center => center.TotalFeet).ToArray());
     }
 
     private readonly record struct WallStudPlan(
-        IReadOnlyList<double> NominalCenters,
-        IReadOnlyList<double> CommonCenters,
-        IReadOnlyList<double> KingCenters,
-        IReadOnlyList<double> FinalCenters,
+        IReadOnlyList<Length> NominalCenters,
+        IReadOnlyList<Length> CommonCenters,
+        IReadOnlyList<Length> KingCenters,
+        IReadOnlyList<Length> FinalCenters,
         int TrimmerCount,
         int CrippleTopCount,
         int CrippleBottomCount)
