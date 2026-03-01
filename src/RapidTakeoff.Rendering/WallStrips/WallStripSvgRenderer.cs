@@ -1,4 +1,5 @@
 using System.Text;
+using RapidTakeoff.Core.Units;
 using RapidTakeoff.Rendering.Walls;
 
 namespace RapidTakeoff.Rendering.WallStrips;
@@ -233,13 +234,16 @@ public sealed class WallStripSvgRenderer
                 }
             }
 
+            var heightDimText = Length.FromFeet(dto.HeightFeet).Format(UnitStyle.Architectural);
+            var lengthDimText = Length.FromFeet(wall.LengthFeet).Format(UnitStyle.Architectural);
+
             // Height dimension marker and label.
             var dimX = rectRight + 22;
             sb.AppendLine($@"  <line x1=""{dimX}"" y1=""{yCursor}"" x2=""{dimX}"" y2=""{rectBottom}"" stroke=""#374151"" stroke-width=""1"" />");
             sb.AppendLine($@"  <line x1=""{dimX - 5}"" y1=""{yCursor}"" x2=""{dimX + 5}"" y2=""{yCursor}"" stroke=""#374151"" stroke-width=""1"" />");
             sb.AppendLine($@"  <line x1=""{dimX - 5}"" y1=""{rectBottom}"" x2=""{dimX + 5}"" y2=""{rectBottom}"" stroke=""#374151"" stroke-width=""1"" />");
             sb.AppendLine(
-                $@"  <text x=""{dimX + 10}"" y=""{yCursor + (stripHeight / 2) + 4}"" font-family=""Arial"" font-size=""11"" text-anchor=""start"">{dto.HeightFeet:F2} ft H</text>");
+                $@"  <text x=""{dimX + 10}"" y=""{yCursor + (stripHeight / 2) + 4}"" font-family=""Arial"" font-size=""11"" text-anchor=""start"">{heightDimText} H</text>");
 
             // Length dimension marker and label along the bottom side.
             var dimY = rectBottom + 18;
@@ -247,7 +251,7 @@ public sealed class WallStripSvgRenderer
             sb.AppendLine($@"  <line x1=""{xCursor}"" y1=""{dimY - 5}"" x2=""{xCursor}"" y2=""{dimY + 5}"" stroke=""#374151"" stroke-width=""1"" />");
             sb.AppendLine($@"  <line x1=""{rectRight:F2}"" y1=""{dimY - 5}"" x2=""{rectRight:F2}"" y2=""{dimY + 5}"" stroke=""#374151"" stroke-width=""1"" />");
             sb.AppendLine(
-                $@"  <text x=""{xCursor + (rectWidth / 2):F2}"" y=""{dimY + 16}"" font-family=""Arial"" font-size=""12"" text-anchor=""middle"">{wall.LengthFeet:F2} ft L</text>");
+                $@"  <text x=""{xCursor + (rectWidth / 2):F2}"" y=""{dimY + 16}"" font-family=""Arial"" font-size=""12"" text-anchor=""middle"">{lengthDimText} L</text>");
 
             // Wall title under each elevation.
             sb.AppendLine(

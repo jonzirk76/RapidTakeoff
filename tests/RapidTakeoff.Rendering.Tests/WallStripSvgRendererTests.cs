@@ -45,8 +45,8 @@ public class WallStripSvgRendererTests
 
         Assert.Contains("<rect", svg);
         Assert.Contains("Wall 1", svg);
-        Assert.Contains("8.00 ft H", svg);
-        Assert.Contains("12.00 ft L", svg);
+        Assert.Contains("8'-0\" H", svg);
+        Assert.Contains("12'-0\" L", svg);
         Assert.Contains("Summary", svg);
         Assert.Contains("Assumptions", svg);
         Assert.Contains("Stud spacing: 16 in on-center.", svg);
